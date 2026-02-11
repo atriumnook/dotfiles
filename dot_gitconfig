@@ -1,0 +1,25 @@
+[user]
+    # ~/.gitconfig_local で設定する（リポジトリには含めない）
+
+[include]
+  path = ~/.gitconfig.local
+
+[core]
+    autocrlf = input
+    editor = nvim
+
+[core]
+    pager = delta
+
+[interactive]
+    diffFilter = delta --color-only
+
+[delta]
+    navigate = true  # hunk 間を n / N で移動できるようにする
+    dark = true      # ダークテーマで表示（代替: light = true、省略で自動判定）
+
+[merge]
+    conflictStyle = zdiff3
+
+[alias]
+    nb = "!f(){ \\\n  echo \"from: $(git branch --show-current)\"; \\\n  t=$(printf \"feature\\nbugfix\\nhotfix\\nrelease\\nchore\\n\" | fzf --no-sort --prompt=\"type > \"); \\\n  [ -z \"$t\" ] && echo \"cancelled\" && exit 1; \\\n  printf \"name: \"; read -r n; \\\n  [ -z \"$n\" ] && echo \"name is required\" && exit 1; \\\n  case \"$n\" in \\\n    *\" \"*|*/|*\"..\"*) echo \"invalid name\"; exit 1 ;; \\\n  esac; \\\n  git switch -c \"$t/$n\"; \\\n}; f"
