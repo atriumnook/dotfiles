@@ -1,0 +1,89 @@
+# `sheldon` configuration file
+# ----------------------------
+#
+# You can modify this file directly or you can use one of the following
+# `sheldon` commands which are provided to assist in editing the config file:
+#
+# - `sheldon add` to add a new plugin to the config file
+# - `sheldon edit` to open up the config file in the default editor
+# - `sheldon remove` to remove a plugin from the config file
+#
+# See the documentation for more https://github.com/rossmacarthur/sheldon#readme
+
+shell = "zsh"
+
+[plugins]
+[plugins.zsh-defer]
+github = "romkatv/zsh-defer"
+
+[plugins.compinit]
+inline = "autoload -Uz compinit && zsh-defer compinit"
+
+[plugins.colors]
+inline = "autoload -Uz colors && zsh-defer colors"
+
+[plugins.zsh-completions]
+github = "zsh-users/zsh-completions"
+
+[plugins.zsh-autosuggestions]
+github = "zsh-users/zsh-autosuggestions"
+apply = ["defer"]
+
+[plugins.zsh-syntax-highlighting]
+github = "zsh-users/zsh-syntax-highlighting"
+apply = ["defer"]
+
+[plugins.fzf]
+inline = '''
+if [[ $options[zle] = on ]]; then
+  source <(fzf --zsh)
+fi
+'''
+
+[plugins.fzf-tab]
+github = "Aloxaf/fzf-tab"
+apply = ["defer"]
+
+[plugins.zoxide]
+inline = 'eval "$(zoxide init zsh)"'
+
+[plugins.zoxide-aliases]
+inline = 'alias cd="z"'
+
+[plugins.eza-aliases]
+inline = '''
+alias eza="eza --icons=auto --git"
+alias ls="eza"
+alias ll="eza -l"
+alias la="eza -a"
+alias lt="eza --tree"
+alias lla="eza -la"
+'''
+
+[plugins.bat-aliases]
+inline = 'alias cat="bat --paging=never"'
+
+[plugins.yazi]
+inline = '''
+y() {
+  local tmp="$(mktemp -t "yazi-cwd.XXXXX")"
+  yazi "$@" --cwd-file="$tmp"
+  if cwd="$(<"$tmp")" && [ -n "$cwd" ] && [ "$cwd" != "$PWD" ]; then
+    builtin cd -- "$cwd"
+  fi
+  rm -f -- "$tmp"
+}
+'''
+
+[plugins.starship]
+inline = 'eval "$(starship init zsh)"'
+
+[plugins.atuin]
+inline = '''
+if [[ $options[zle] = on ]]; then
+  eval "$(atuin init zsh --disable-up-arrow --disable-ctrl-r)"
+fi
+'''
+
+[templates]
+defer = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"

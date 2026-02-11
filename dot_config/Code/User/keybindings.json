@@ -1,0 +1,18 @@
+[
+    {
+        "key": "alt+a",
+        "command": "editor.action.sortLinesAscending"
+    },
+    {
+        "key": "alt+m",
+        "command": "editor.action.removeDuplicateLines"
+    },
+    {
+        "key": "shift+enter",
+        "command": "workbench.action.terminal.sendSequence",
+        "args": {
+            "text": "\\\r\n"
+        },
+        "when": "terminalFocus"
+    }
+]
