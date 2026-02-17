@@ -1,5 +1,7 @@
 [user]
-    # ~/.gitconfig_local で設定する（リポジトリには含めない）
+    # ~/.gitconfig.local で設定する（リポジトリには含めない）
+    # name = "name"
+    # email = "email@example.com"
 
 [include]
     path = ~/.gitconfig.local
