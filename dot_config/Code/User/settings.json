@@ -1,0 +1,50 @@
+{ "workbench.colorTheme": "Catppuccin Mocha",
+"update.mode": "none",
+"github.copilot.nextEditSuggestions.enabled": true,
+"workbench.iconTheme": "catppuccin-mocha",
+"claudeCode.preferredLocation": "sidebar",
+"[markdown]": {
+    "editor.defaultFormatter": "yzhang.markdown-all-in-one"
+},
+"[typescriptreact]": {
+    "editor.defaultFormatter": "biomejs.biome"
+},
+"diffEditor.ignoreTrimWhitespace": true,
+"projectManager.git.baseFolders": [
+    "~/git"
+],
+"json.schemaDownload.trustedDomains": {
+    "https://schemastore.azurewebsites.net/": true,
+    "https://raw.githubusercontent.com/": true,
+    "https://www.schemastore.org/": true,
+    "https://json.schemastore.org/": true,
+    "https://json-schema.org/": true,
+    "https://biomejs.dev": true
+},
+"editor.mouseWheelZoom": true,
+"terminal.integrated.mouseWheelZoom": true,
+"terminal.integrated.profiles.linux": {
+    "bash": {
+        "path": "bash",
+        "icon": "terminal-bash"
+    },
+    "zsh": {
+        "path": "/usr/bin/zsh"
+    },
+    "fish": {
+        "path": "fish"
+    },
+    "tmux": {
+        "path": "tmux",
+        "icon": "terminal-tmux"
+    },
+    "pwsh": {
+        "path": "pwsh",
+        "icon": "terminal-powershell"
+    }
+},
+"terminal.integrated.defaultProfile.linux": "zsh",
+"editor.fontFamily": "'Droid Sans Mono', PlemolJP, 'PlemolJP Console NF', monospace",
+"claudeCode.selectedModel": "default",
+"claudeCode.allowDangerouslySkipPermissions": true
+}

@@ -48,3 +48,45 @@ unsetopt EXTENDED_HISTORY
 # Write history immediately (HM does not enable this by default,
 # but it does not change semantics)
 setopt INC_APPEND_HISTORY
+
+# ==================================================
+# Keybindings
+# ==================================================
+
+# Use emacs keybindings
+bindkey -e
+
+# Helper: bind only when key sequence is non-empty
+function _zsh_bind() { [[ -n "$1" ]] && bindkey "$1" "$2"; }
+
+# Home/End keys
+_zsh_bind "${terminfo[khome]}" beginning-of-line
+_zsh_bind "${terminfo[kend]}"  end-of-line
+bindkey "^[[H" beginning-of-line   # xterm
+bindkey "^[OH" beginning-of-line   # application mode
+bindkey "^[[F" end-of-line         # xterm
+bindkey "^[OF" end-of-line         # application mode
+
+# Delete key
+_zsh_bind "${terminfo[kdch1]}" delete-char
+bindkey "^[[3~" delete-char
+
+# Arrow keys
+bindkey "^[[A" up-line-or-history
+bindkey "^[[B" down-line-or-history
+bindkey "^[[C" forward-char
+bindkey "^[[D" backward-char
+
+# Ctrl+Left/Right for word navigation
+_zsh_bind "${terminfo[kLFT5]}" backward-word
+_zsh_bind "${terminfo[kRIT5]}" forward-word
+bindkey "^[[1;5D" backward-word    # Ctrl+Left
+bindkey "^[[1;5C" forward-word     # Ctrl+Right
+
+# PageUp/PageDown keys
+_zsh_bind "${terminfo[kpp]}" up-line-or-history
+_zsh_bind "${terminfo[knp]}" down-line-or-history
+bindkey "^[[5~" up-line-or-history   # PageUp
+bindkey "^[[6~" down-line-or-history # PageDown
+
+unfunction _zsh_bind

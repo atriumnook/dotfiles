@@ -2,7 +2,7 @@
     # ~/.gitconfig_local で設定する（リポジトリには含めない）
 
 [include]
-  path = ~/.gitconfig.local
+    path = ~/.gitconfig.local
 
 [core]
     autocrlf = input
