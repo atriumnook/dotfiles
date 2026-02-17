@@ -21,9 +21,9 @@ delta = "latest"
 starship = "latest"
 yazi = "latest"
 zellij = "latest"
-tmux = "latest"
 
 {{- if eq .chezmoi.os "linux" }}
+tmux = "latest"
 {{-   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
 # --- Provided by Omarchy (install on WSL) ---
 bat = "latest"
@@ -37,5 +37,6 @@ neovim = "latest"
 ripgrep = "latest"
 sqlite = "latest"
 zoxide = "latest"
+claude = "latest"
 {{-   end }}
 {{- end }}
