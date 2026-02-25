@@ -6,7 +6,8 @@
 #   chmod +x ~/.config/tmux/tmux-clipboard-copy
 
 if [ -n "$WSL_DISTRO_NAME" ]; then
-    clip.exe
+    # OSC 52 (set-clipboard on) に任せる。clip.exe は UTF-8 を正しく扱えず文字化けする。
+    cat > /dev/null
 elif [ "$(uname -s)" = "Darwin" ]; then
     pbcopy
 elif [ -n "$WAYLAND_DISPLAY" ]; then

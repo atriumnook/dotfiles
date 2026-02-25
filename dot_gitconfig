@@ -9,8 +9,6 @@
 [core]
     autocrlf = input
     editor = nvim
-
-[core]
     pager = delta
 
 [interactive]
@@ -22,6 +20,18 @@
 
 [merge]
     conflictStyle = zdiff3
+
+[pull]
+    rebase = false
+
+[push]
+    autoSetupRemote = true
+
+[fetch]
+    prune = true
+
+[init]
+    defaultBranch = main
 
 [alias]
     nb = "!f(){ \\\n  echo \"from: $(git branch --show-current)\"; \\\n  t=$(printf \"feature\\nbugfix\\nhotfix\\nrelease\\nchore\\n\" | fzf --no-sort --prompt=\"type > \"); \\\n  [ -z \"$t\" ] && echo \"cancelled\" && exit 1; \\\n  printf \"name: \"; read -r n; \\\n  [ -z \"$n\" ] && echo \"name is required\" && exit 1; \\\n  case \"$n\" in \\\n    *\" \"*|*/|*\"..\"*) echo \"invalid name\"; exit 1 ;; \\\n  esac; \\\n  git switch -c \"$t/$n\"; \\\n}; f"
