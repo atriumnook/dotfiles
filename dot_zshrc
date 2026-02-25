@@ -42,14 +42,6 @@ unsetopt HIST_EXPIRE_DUPS_FIRST
 unsetopt EXTENDED_HISTORY
 
 # ==================================================
-# Recommended additions (safe, HM-compatible)
-# ==================================================
-
-# Write history immediately (HM does not enable this by default,
-# but it does not change semantics)
-setopt INC_APPEND_HISTORY
-
-# ==================================================
 # Keybindings
 # ==================================================
 
