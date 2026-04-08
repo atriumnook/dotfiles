@@ -22,21 +22,15 @@ starship = "latest"
 yazi = "latest"
 zellij = "latest"
 
-{{- if eq .chezmoi.os "linux" }}
-tmux = "latest"
-{{-   if (.chezmoi.kernel.osrelease | lower | contains "microsoft") }}
-# --- Provided by Omarchy (install on WSL) ---
+{{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (.chezmoi.kernel.osrelease | lower | contains "debian") }}
+# --- CLI Tools (WSL / Debian) ---
 bat = "latest"
 eza = "latest"
 fd = "latest"
 fzf = "latest"
-gh = "latest"
 jq = "latest"
 lazygit = "latest"
 neovim = "latest"
 ripgrep = "latest"
-sqlite = "latest"
 zoxide = "latest"
-claude = "latest"
-{{-   end }}
 {{- end }}

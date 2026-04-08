@@ -1,0 +1,6 @@
+{{- if not (stat (joinPath .chezmoi.homeDir ".local/share/omarchy")) }}
+.config/nvim/lua/plugins/all-themes.lua
+.config/nvim/lua/plugins/omarchy-theme-hotreload.lua
+.config/nvim/lua/plugins/symlink_theme.lua
+.config/nvim/plugin/after/transparency.lua
+{{- end }}

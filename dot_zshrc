@@ -1,57 +1,39 @@
-eval "$(mise activate zsh)"
+# Startup profiling (opt-in: ZSH_PROFILE=1 zsh)
+[[ -n $ZSH_PROFILE ]] && zmodload zsh/zprof
+
+# Add mise shims early so sheldon and other managed tools resolve correctly
+export PATH="$HOME/.local/share/mise/shims:$PATH"
+
+eval "$(sheldon source)"
+
+# Defer mise activation; single quotes ensure the subshell runs after first prompt
+zsh-defer eval '$(command mise activate zsh)'
 
 export FZF_DEFAULT_COMMAND="fd --type f"
 export FZF_DEFAULT_OPTS="--height 40% --border"
 
-eval "$(sheldon source)"
-
-# ==================================================
-# History configuration
-# ==================================================
-
-# ---- history file location ----
+# History
 HISTFILE="${ZDOTDIR:-$HOME}/.zsh_history"
-
-# ---- history size ----
 HISTSIZE=10000
 SAVEHIST=10000
 
-# Ensure directory exists
-mkdir -p "$(dirname "$HISTFILE")"
+setopt HIST_FCNTL_LOCK                 # matches Home Manager locking behavior
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS
+setopt HIST_IGNORE_SPACE               # ignore commands prefixed with space
 
-# ---- locking (same as HM) ----
-setopt HIST_FCNTL_LOCK
+unsetopt HIST_IGNORE_ALL_DUPS HIST_SAVE_NO_DUPS HIST_FIND_NO_DUPS \
+         HIST_EXPIRE_DUPS_FIRST EXTENDED_HISTORY
 
-# ==================================================
-# Enabled history options
-# ==================================================
+# Write immediately; not set by Home Manager but semantically safe
+setopt INC_APPEND_HISTORY
 
-setopt APPEND_HISTORY          # append instead of overwrite
-setopt SHARE_HISTORY           # share between sessions
-setopt HIST_IGNORE_DUPS        # ignore consecutive duplicates
-setopt HIST_IGNORE_SPACE       # ignore commands starting with space
-
-# ==================================================
-# Disabled history options
-# ==================================================
-
-unsetopt HIST_IGNORE_ALL_DUPS
-unsetopt HIST_SAVE_NO_DUPS
-unsetopt HIST_FIND_NO_DUPS
-unsetopt HIST_EXPIRE_DUPS_FIRST
-unsetopt EXTENDED_HISTORY
-
-# ==================================================
 # Keybindings
-# ==================================================
-
-# Use emacs keybindings
 bindkey -e
 
-# Helper: bind only when key sequence is non-empty
+# Guard: bind only if terminfo key sequence is non-empty
 function _zsh_bind() { [[ -n "$1" ]] && bindkey "$1" "$2"; }
 
-# Home/End keys
+# Home/End
 _zsh_bind "${terminfo[khome]}" beginning-of-line
 _zsh_bind "${terminfo[kend]}"  end-of-line
 bindkey "^[[H" beginning-of-line   # xterm
@@ -59,7 +41,7 @@ bindkey "^[OH" beginning-of-line   # application mode
 bindkey "^[[F" end-of-line         # xterm
 bindkey "^[OF" end-of-line         # application mode
 
-# Delete key
+# Delete
 _zsh_bind "${terminfo[kdch1]}" delete-char
 bindkey "^[[3~" delete-char
 
@@ -69,16 +51,23 @@ bindkey "^[[B" down-line-or-history
 bindkey "^[[C" forward-char
 bindkey "^[[D" backward-char
 
-# Ctrl+Left/Right for word navigation
+# Ctrl+Left/Right
 _zsh_bind "${terminfo[kLFT5]}" backward-word
 _zsh_bind "${terminfo[kRIT5]}" forward-word
 bindkey "^[[1;5D" backward-word    # Ctrl+Left
 bindkey "^[[1;5C" forward-word     # Ctrl+Right
 
-# PageUp/PageDown keys
+# PageUp/PageDown
 _zsh_bind "${terminfo[kpp]}" up-line-or-history
 _zsh_bind "${terminfo[knp]}" down-line-or-history
 bindkey "^[[5~" up-line-or-history   # PageUp
 bindkey "^[[6~" down-line-or-history # PageDown
 
 unfunction _zsh_bind
+
+# Vite+ bin (https://viteplus.dev)
+if [[ -r "$HOME/.vite-plus/env" ]]; then
+  . "$HOME/.vite-plus/env"
+fi
+
+[[ -n $ZSH_PROFILE ]] && zprof

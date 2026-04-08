@@ -1,6 +1,6 @@
 # dotfiles
 
-Chezmoi で管理する dotfiles（Omarchy / WSL 対応）
+Chezmoi で管理する dotfiles（Omarchy / WSL / Debian）
 
 ## セットアップ
 
@@ -8,14 +8,10 @@ Chezmoi で管理する dotfiles（Omarchy / WSL 対応）
 
 ```bash
 mise install chezmoi
-chezmoi init https://github.com/<user>/dotfiles
+chezmoi init https://github.com/atriumnook/dotfiles
 chezmoi apply
 mise install
 ```
-
-## 環境別の差分
-
-`mise/config.toml.tmpl` は chezmoi テンプレートで環境を判別し、Omarchy にプリインストールされているツールを WSL 環境でのみ mise 経由でインストールします。
 
 ## 初期設定
 
