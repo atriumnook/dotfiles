@@ -1,0 +1,158 @@
+{
+    "$help": "https://aka.ms/terminal-documentation",
+    "$schema": "https://aka.ms/terminal-profiles-schema",
+    "actions": [
+        {
+            "command": { "action": "copy", "singleLine": false },
+            "id": "User.copy.644BA8F2"
+        },
+        { "command": "paste", "id": "User.paste" },
+        { "command": "find",  "id": "User.find"  },
+
+        { "command": "newTab",    "id": "User.newTab"   },
+        { "command": "closePane", "id": "User.closePane" },
+        { "command": "nextTab",   "id": "User.nextTab"  },
+        { "command": "prevTab",   "id": "User.prevTab"  },
+
+        { "command": { "action": "switchToTab", "index": 0 }, "id": "User.switchTab1" },
+        { "command": { "action": "switchToTab", "index": 1 }, "id": "User.switchTab2" },
+        { "command": { "action": "switchToTab", "index": 2 }, "id": "User.switchTab3" },
+        { "command": { "action": "switchToTab", "index": 3 }, "id": "User.switchTab4" },
+        { "command": { "action": "switchToTab", "index": 4 }, "id": "User.switchTab5" },
+        { "command": { "action": "switchToTab", "index": 5 }, "id": "User.switchTab6" },
+        { "command": { "action": "switchToTab", "index": 6 }, "id": "User.switchTab7" },
+        { "command": { "action": "switchToTab", "index": 7 }, "id": "User.switchTab8" },
+
+        {
+            "command": { "action": "splitPane", "split": "horizontal", "splitMode": "duplicate" },
+            "id": "User.splitPane.down"
+        },
+        {
+            "command": { "action": "splitPane", "split": "vertical", "splitMode": "duplicate" },
+            "id": "User.splitPane.right"
+        },
+
+        { "command": { "action": "moveFocus", "direction": "left"  }, "id": "User.moveFocus.left"  },
+        { "command": { "action": "moveFocus", "direction": "right" }, "id": "User.moveFocus.right" },
+        { "command": { "action": "moveFocus", "direction": "up"    }, "id": "User.moveFocus.up"    },
+        { "command": { "action": "moveFocus", "direction": "down"  }, "id": "User.moveFocus.down"  },
+
+        { "command": "resetFontSize",                               "id": "User.resetFontSize"    },
+        { "command": { "action": "adjustFontSize", "delta":  1 },   "id": "User.increaseFontSize" },
+        { "command": { "action": "adjustFontSize", "delta": -1 },   "id": "User.decreaseFontSize" }
+    ],
+
+    "copyFormatting": "none",
+    "copyOnSelect": true,
+    "defaultProfile": "{51855cb2-8cce-5362-8f54-464b92b32386}",
+
+    "keybindings": [
+        { "id": "User.copy.644BA8F2", "keys": "ctrl+shift+c"   },
+        { "id": "User.paste",         "keys": "ctrl+shift+v"   },
+        { "id": "User.find",          "keys": "ctrl+shift+f"   },
+
+        { "id": "User.newTab",    "keys": "ctrl+shift+t"  },
+        { "id": "User.closePane", "keys": "ctrl+shift+w"  },
+        { "id": "User.nextTab",   "keys": "ctrl+tab"      },
+        { "id": "User.nextTab",   "keys": "ctrl+page_down" },
+        { "id": "User.prevTab",   "keys": "ctrl+page_up"  },
+
+        { "id": "User.switchTab1", "keys": "alt+1" },
+        { "id": "User.switchTab2", "keys": "alt+2" },
+        { "id": "User.switchTab3", "keys": "alt+3" },
+        { "id": "User.switchTab4", "keys": "alt+4" },
+        { "id": "User.switchTab5", "keys": "alt+5" },
+        { "id": "User.switchTab6", "keys": "alt+6" },
+        { "id": "User.switchTab7", "keys": "alt+7" },
+        { "id": "User.switchTab8", "keys": "alt+8" },
+
+        { "id": "User.splitPane.down",  "keys": "ctrl+shift+d" },
+        { "id": "User.splitPane.right", "keys": "alt+shift+d"  },
+
+        { "id": "User.moveFocus.left",  "keys": "ctrl+shift+left"  },
+        { "id": "User.moveFocus.right", "keys": "ctrl+shift+right" },
+        { "id": "User.moveFocus.up",    "keys": "ctrl+shift+up"    },
+        { "id": "User.moveFocus.down",  "keys": "ctrl+shift+down"  },
+
+        { "id": "User.resetFontSize",    "keys": "ctrl+0"       },
+        { "id": "User.increaseFontSize", "keys": "ctrl+shift+;" },
+        { "id": "User.decreaseFontSize", "keys": "ctrl+-"       }
+    ],
+
+    "newTabMenu": [{ "type": "remainingProfiles" }],
+
+    "profiles": {
+        "defaults": {
+            "backgroundImage": null,
+            "colorScheme": "Catppuccin Mocha",
+            "font": {
+                "face": "PlemolJP Console NF, UDEV Gothic NF",
+                "size": 10
+            },
+            "scrollbarState": "visible",
+            "historySize": 100000
+        },
+        "list": [
+            {
+                "guid": "{51855cb2-8cce-5362-8f54-464b92b32386}",
+                "hidden": false,
+                "icon": null,
+                "name": "Ubuntu",
+                "opacity": 80,
+                "source": "CanonicalGroupLimited.Ubuntu_79rhkp1fndgsc",
+                "useAcrylic": true
+            }
+        ]
+    },
+
+    "schemes": [
+        {
+            "background": "#1E1E2E",
+            "black": "#45475A",
+            "blue": "#89B4FA",
+            "brightBlack": "#585B70",
+            "brightBlue": "#89B4FA",
+            "brightCyan": "#94E2D5",
+            "brightGreen": "#A6E3A1",
+            "brightPurple": "#F5C2E7",
+            "brightRed": "#F38BA8",
+            "brightWhite": "#A6ADC8",
+            "brightYellow": "#F9E2AF",
+            "cursorColor": "#F5E0DC",
+            "cyan": "#94E2D5",
+            "foreground": "#CDD6F4",
+            "green": "#A6E3A1",
+            "name": "Catppuccin Mocha",
+            "purple": "#F5C2E7",
+            "red": "#F38BA8",
+            "selectionBackground": "#585B70",
+            "white": "#BAC2DE",
+            "yellow": "#F9E2AF"
+        }
+    ],
+
+    "theme": "Catppuccin Mocha",
+    "themes": [
+        {
+            "name": "Catppuccin Mocha",
+            "tab": {
+                "background": "#1E1E2EFF",
+                "iconStyle": "default",
+                "showCloseButton": "always",
+                "unfocusedBackground": null
+            },
+            "tabRow": {
+                "background": "#181825FF",
+                "unfocusedBackground": "#11111BFF"
+            },
+            "window": {
+                "applicationTheme": "dark",
+                "experimental.rainbowFrame": false,
+                "frame": null,
+                "unfocusedFrame": null,
+                "useMica": false
+            }
+        }
+    ],
+    "useAcrylicInTabRow": true
+}

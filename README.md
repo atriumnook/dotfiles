@@ -13,7 +13,18 @@ chezmoi apply
 mise install
 ```
 
-## 初期設定
+## Windows Terminal
+
+設定ファイルは `windows-terminal/settings.json` で管理。chezmoi apply では自動配備されないため、Windows 側へは手動でコピーする。
+
+PowerShell から:
+
+```powershell
+Copy-Item \\wsl.localhost\Ubuntu\home\user\.local\share\chezmoi\windows-terminal\settings.json `
+  "$env:LOCALAPPDATA\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbwe\LocalState\settings.json"
+```
+
+## Git
 
 ローカル Git 設定は `~/.gitconfig.local` に記載:
 
