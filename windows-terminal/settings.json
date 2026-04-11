@@ -3,84 +3,274 @@
     "$schema": "https://aka.ms/terminal-profiles-schema",
     "actions": [
         {
-            "command": { "action": "copy", "singleLine": false },
+            "command": {
+                "action": "copy",
+                "singleLine": false
+            },
             "id": "User.copy.644BA8F2"
         },
-        { "command": "paste", "id": "User.paste" },
-        { "command": "find",  "id": "User.find"  },
-
-        { "command": "newTab",    "id": "User.newTab"   },
-        { "command": "closePane", "id": "User.closePane" },
-        { "command": "nextTab",   "id": "User.nextTab"  },
-        { "command": "prevTab",   "id": "User.prevTab"  },
-
-        { "command": { "action": "switchToTab", "index": 0 }, "id": "User.switchTab1" },
-        { "command": { "action": "switchToTab", "index": 1 }, "id": "User.switchTab2" },
-        { "command": { "action": "switchToTab", "index": 2 }, "id": "User.switchTab3" },
-        { "command": { "action": "switchToTab", "index": 3 }, "id": "User.switchTab4" },
-        { "command": { "action": "switchToTab", "index": 4 }, "id": "User.switchTab5" },
-        { "command": { "action": "switchToTab", "index": 5 }, "id": "User.switchTab6" },
-        { "command": { "action": "switchToTab", "index": 6 }, "id": "User.switchTab7" },
-        { "command": { "action": "switchToTab", "index": 7 }, "id": "User.switchTab8" },
-
         {
-            "command": { "action": "splitPane", "split": "horizontal", "splitMode": "duplicate" },
+            "command": {
+                "action": "sendInput",
+                "input": "\u001b\r"
+            },
+            "id": "User.sendEnter"
+        },
+        {
+            "command": {
+                "action": "adjustFontSize",
+                "delta": -1
+            },
+            "id": "User.decreaseFontSize"
+        },
+        {
+            "command": "closePane",
+            "id": "User.closePane"
+        },
+        {
+            "command": {
+                "action": "splitPane",
+                "split": "down",
+                "splitMode": "duplicate"
+            },
             "id": "User.splitPane.down"
         },
         {
-            "command": { "action": "splitPane", "split": "vertical", "splitMode": "duplicate" },
+            "command": "paste",
+            "id": "User.paste"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 5
+            },
+            "id": "User.switchTab6"
+        },
+        {
+            "command": "resetFontSize",
+            "id": "User.resetFontSize"
+        },
+        {
+            "command": {
+                "action": "newTab"
+            },
+            "id": "User.newTab"
+        },
+        {
+            "command": {
+                "action": "moveFocus",
+                "direction": "right"
+            },
+            "id": "User.moveFocus.right"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 7
+            },
+            "id": "User.switchTab8"
+        },
+        {
+            "command": "find",
+            "id": "User.find"
+        },
+        {
+            "command": {
+                "action": "nextTab"
+            },
+            "id": "User.nextTab"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 2
+            },
+            "id": "User.switchTab3"
+        },
+        {
+            "command": {
+                "action": "prevTab"
+            },
+            "id": "User.prevTab"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 0
+            },
+            "id": "User.switchTab1"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 1
+            },
+            "id": "User.switchTab2"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 3
+            },
+            "id": "User.switchTab4"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 4
+            },
+            "id": "User.switchTab5"
+        },
+        {
+            "command": {
+                "action": "adjustFontSize",
+                "delta": 1
+            },
+            "id": "User.increaseFontSize"
+        },
+        {
+            "command": {
+                "action": "switchToTab",
+                "index": 6
+            },
+            "id": "User.switchTab7"
+        },
+        {
+            "command": {
+                "action": "moveFocus",
+                "direction": "up"
+            },
+            "id": "User.moveFocus.up"
+        },
+        {
+            "command": {
+                "action": "splitPane",
+                "split": "right",
+                "splitMode": "duplicate"
+            },
             "id": "User.splitPane.right"
         },
-
-        { "command": { "action": "moveFocus", "direction": "left"  }, "id": "User.moveFocus.left"  },
-        { "command": { "action": "moveFocus", "direction": "right" }, "id": "User.moveFocus.right" },
-        { "command": { "action": "moveFocus", "direction": "up"    }, "id": "User.moveFocus.up"    },
-        { "command": { "action": "moveFocus", "direction": "down"  }, "id": "User.moveFocus.down"  },
-
-        { "command": "resetFontSize",                               "id": "User.resetFontSize"    },
-        { "command": { "action": "adjustFontSize", "delta":  1 },   "id": "User.increaseFontSize" },
-        { "command": { "action": "adjustFontSize", "delta": -1 },   "id": "User.decreaseFontSize" }
+        {
+            "command": {
+                "action": "moveFocus",
+                "direction": "left"
+            },
+            "id": "User.moveFocus.left"
+        },
+        {
+            "command": {
+                "action": "moveFocus",
+                "direction": "down"
+            },
+            "id": "User.moveFocus.down"
+        }
     ],
-
     "copyFormatting": "none",
     "copyOnSelect": true,
     "defaultProfile": "{51855cb2-8cce-5362-8f54-464b92b32386}",
-
     "keybindings": [
-        { "id": "User.copy.644BA8F2", "keys": "ctrl+shift+c"   },
-        { "id": "User.paste",         "keys": "ctrl+shift+v"   },
-        { "id": "User.find",          "keys": "ctrl+shift+f"   },
-
-        { "id": "User.newTab",    "keys": "ctrl+shift+t"  },
-        { "id": "User.closePane", "keys": "ctrl+shift+w"  },
-        { "id": "User.nextTab",   "keys": "ctrl+tab"      },
-        { "id": "User.nextTab",   "keys": "ctrl+page_down" },
-        { "id": "User.prevTab",   "keys": "ctrl+page_up"  },
-
-        { "id": "User.switchTab1", "keys": "alt+1" },
-        { "id": "User.switchTab2", "keys": "alt+2" },
-        { "id": "User.switchTab3", "keys": "alt+3" },
-        { "id": "User.switchTab4", "keys": "alt+4" },
-        { "id": "User.switchTab5", "keys": "alt+5" },
-        { "id": "User.switchTab6", "keys": "alt+6" },
-        { "id": "User.switchTab7", "keys": "alt+7" },
-        { "id": "User.switchTab8", "keys": "alt+8" },
-
-        { "id": "User.splitPane.down",  "keys": "ctrl+shift+d" },
-        { "id": "User.splitPane.right", "keys": "alt+shift+d"  },
-
-        { "id": "User.moveFocus.left",  "keys": "ctrl+shift+left"  },
-        { "id": "User.moveFocus.right", "keys": "ctrl+shift+right" },
-        { "id": "User.moveFocus.up",    "keys": "ctrl+shift+up"    },
-        { "id": "User.moveFocus.down",  "keys": "ctrl+shift+down"  },
-
-        { "id": "User.resetFontSize",    "keys": "ctrl+0"       },
-        { "id": "User.increaseFontSize", "keys": "ctrl+shift+;" },
-        { "id": "User.decreaseFontSize", "keys": "ctrl+-"       }
+        {
+            "id": "User.copy.644BA8F2",
+            "keys": "ctrl+shift+c"
+        },
+        {
+            "id": "User.sendEnter",
+            "keys": "shift+enter"
+        },
+        {
+            "id": "User.paste",
+            "keys": "ctrl+shift+v"
+        },
+        {
+            "id": "User.nextTab",
+            "keys": "ctrl+tab"
+        },
+        {
+            "id": "User.find",
+            "keys": "ctrl+shift+f"
+        },
+        {
+            "id": "User.closePane",
+            "keys": "ctrl+shift+w"
+        },
+        {
+            "id": "User.newTab",
+            "keys": "ctrl+shift+t"
+        },
+        {
+            "id": "User.switchTab1",
+            "keys": "alt+1"
+        },
+        {
+            "id": "User.switchTab2",
+            "keys": "alt+2"
+        },
+        {
+            "id": "User.switchTab3",
+            "keys": "alt+3"
+        },
+        {
+            "id": "User.switchTab4",
+            "keys": "alt+4"
+        },
+        {
+            "id": "User.switchTab5",
+            "keys": "alt+5"
+        },
+        {
+            "id": "User.increaseFontSize",
+            "keys": "ctrl+shift+plus"
+        },
+        {
+            "id": "User.switchTab6",
+            "keys": "alt+6"
+        },
+        {
+            "id": "User.switchTab7",
+            "keys": "alt+7"
+        },
+        {
+            "id": "User.switchTab8",
+            "keys": "alt+8"
+        },
+        {
+            "id": "User.splitPane.down",
+            "keys": "ctrl+shift+d"
+        },
+        {
+            "id": "User.decreaseFontSize",
+            "keys": "ctrl+minus"
+        },
+        {
+            "id": "User.splitPane.right",
+            "keys": "alt+shift+d"
+        },
+        {
+            "id": "User.moveFocus.left",
+            "keys": "ctrl+shift+left"
+        },
+        {
+            "id": "User.moveFocus.right",
+            "keys": "ctrl+shift+right"
+        },
+        {
+            "id": "User.moveFocus.up",
+            "keys": "ctrl+shift+up"
+        },
+        {
+            "id": "User.moveFocus.down",
+            "keys": "ctrl+shift+down"
+        },
+        {
+            "id": "User.resetFontSize",
+            "keys": "ctrl+0"
+        }
     ],
-
-    "newTabMenu": [{ "type": "remainingProfiles" }],
-
+    "newTabMenu": [
+        {
+            "type": "remainingProfiles"
+        }
+    ],
     "profiles": {
         "defaults": {
             "backgroundImage": null,
@@ -89,22 +279,25 @@
                 "face": "PlemolJP Console NF, UDEV Gothic NF",
                 "size": 10
             },
-            "scrollbarState": "visible",
-            "historySize": 100000
+            "historySize": 100000,
+            "scrollbarState": "visible"
         },
         "list": [
             {
                 "guid": "{51855cb2-8cce-5362-8f54-464b92b32386}",
                 "hidden": false,
-                "icon": null,
                 "name": "Ubuntu",
                 "opacity": 80,
                 "source": "CanonicalGroupLimited.Ubuntu_79rhkp1fndgsc",
                 "useAcrylic": true
+            },
+            {
+                "guid": "{0caa0dad-35be-5f56-a8ff-afceeeaa6101}",
+                "hidden": false,
+                "name": "Command Prompt"
             }
         ]
     },
-
     "schemes": [
         {
             "background": "#1E1E2E",
@@ -130,7 +323,6 @@
             "yellow": "#F9E2AF"
         }
     ],
-
     "theme": "Catppuccin Mocha",
     "themes": [
         {

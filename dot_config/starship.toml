@@ -1,4 +1,13 @@
-"$schema" = 'https://starship.rs/config-schema.json'
+"$schema" = "https://starship.rs/config-schema.json"
+
+[git_status]
+disabled = true
+
+[netns]
+disabled = true
+
+[pulumi]
+disabled = true
 
 [aws]
 symbol = " "
@@ -58,7 +67,8 @@ symbol = " "
 symbol = " "
 
 [git_commit]
-tag_symbol = '  '
+disabled = true
+tag_symbol = "  "
 
 [golang]
 symbol = " "
@@ -172,6 +182,7 @@ symbol = " "
 symbol = " "
 
 [pijul_channel]
+disabled = true
 symbol = " "
 
 [pixi]
@@ -179,6 +190,7 @@ symbol = "󰏗 "
 
 [python]
 symbol = " "
+detect_env_vars = []
 
 [rlang]
 symbol = "󰟔 "

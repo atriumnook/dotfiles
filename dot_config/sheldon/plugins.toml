@@ -29,6 +29,9 @@ github = "zsh-users/zsh-completions"
 github = "zsh-users/zsh-autosuggestions"
 apply = ["defer"]
 
+[plugins.zsh-autosuggestions-ignore]
+inline = "ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)"
+
 [plugins.zsh-syntax-highlighting]
 github = "zsh-users/zsh-syntax-highlighting"
 apply = ["defer"]

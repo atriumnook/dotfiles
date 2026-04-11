@@ -22,7 +22,7 @@ starship = "latest"
 yazi = "latest"
 zellij = "latest"
 
-{{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (.chezmoi.kernel.osrelease | lower | contains "debian") }}
+{{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (eq .chezmoi.osRelease.id "debian") }}
 # --- CLI Tools (WSL / Debian) ---
 bat = "latest"
 eza = "latest"

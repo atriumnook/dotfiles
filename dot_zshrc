@@ -7,7 +7,7 @@ export PATH="$HOME/.local/share/mise/shims:$PATH"
 eval "$(sheldon source)"
 
 # Defer mise activation; single quotes ensure the subshell runs after first prompt
-zsh-defer eval '$(command mise activate zsh)'
+zsh-defer -c 'source <(mise activate zsh)'
 
 export FZF_DEFAULT_COMMAND="fd --type f"
 export FZF_DEFAULT_OPTS="--height 40% --border"
