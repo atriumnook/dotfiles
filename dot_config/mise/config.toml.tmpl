@@ -1,5 +1,5 @@
 [settings]
-experimental = true
+lockfile = true
 disable_backends = ["asdf", "vfox"]
 
 [settings.pipx]
@@ -7,30 +7,28 @@ uvx = true
 
 [tools]
 # --- Runtimes ---
-# Node.js
 node = "24"
-bun = "latest"
-# Python
-uv = "latest"
+bun = "1"
+uv = "0"
 
-# --- CLI Tools ---
-"github:rossmacarthur/sheldon" = "latest"
-atuin = "latest"
-chezmoi = "latest"
-delta = "latest"
-starship = "latest"
-yazi = "latest"
-zellij = "latest"
+# --- CLI Tools (cross-platform) ---
+"github:rossmacarthur/sheldon" = "0"
+atuin = "18"
+chezmoi = "2"
+delta = "0"
+starship = "1"
+yazi = "26"
+zellij = "0"
 
 {{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (eq .chezmoi.osRelease.id "debian") }}
 # --- CLI Tools (WSL / Debian) ---
-bat = "latest"
-eza = "latest"
-fd = "latest"
-fzf = "latest"
-jq = "latest"
-lazygit = "latest"
-neovim = "latest"
-ripgrep = "latest"
-zoxide = "latest"
+bat = "0"
+eza = "0"
+fd = "10"
+fzf = "0"
+jq = "1"
+lazygit = "0"
+neovim = "0"
+ripgrep = "15"
+zoxide = "0"
 {{- end }}
