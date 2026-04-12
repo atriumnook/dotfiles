@@ -17,7 +17,13 @@ shell = "zsh"
 github = "romkatv/zsh-defer"
 
 [plugins.compinit]
-inline = "autoload -Uz compinit && zsh-defer compinit"
+inline = '''
+autoload -Uz compinit && zsh-defer -c '
+  compinit
+  for def in $__compdef_queue; do compdef ${=def}; done
+  unset __compdef_queue
+'
+'''
 
 [plugins.colors]
 inline = "autoload -Uz colors && zsh-defer colors"
@@ -30,7 +36,7 @@ github = "zsh-users/zsh-autosuggestions"
 apply = ["defer"]
 
 [plugins.zsh-autosuggestions-ignore]
-inline = "ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)"
+inline = "zsh-defer -c 'ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)'"
 
 [plugins.zsh-syntax-highlighting]
 github = "zsh-users/zsh-syntax-highlighting"

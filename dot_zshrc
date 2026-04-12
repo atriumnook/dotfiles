@@ -4,9 +4,13 @@
 # Add mise shims early so sheldon and other managed tools resolve correctly
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 
+# Queue compdef calls until deferred compinit runs
+typeset -ga __compdef_queue
+compdef() { __compdef_queue+=("${(j: :)@}") }
+
 eval "$(sheldon source)"
 
-# Defer mise activation; single quotes ensure the subshell runs after first prompt
+# Defer mise activation; -c keeps the activation work off the first prompt
 zsh-defer -c 'source <(mise activate zsh)'
 
 export FZF_DEFAULT_COMMAND="fd --type f"
@@ -65,7 +69,8 @@ bindkey "^[[6~" down-line-or-history # PageDown
 
 unfunction _zsh_bind
 
-# Vite+ bin (https://viteplus.dev)
+# Re-source vite-plus for completion registration (PATH already set via .zshenv;
+# compdef stub is available here so vp completion will be queued and replayed)
 if [[ -r "$HOME/.vite-plus/env" ]]; then
   . "$HOME/.vite-plus/env"
 fi
