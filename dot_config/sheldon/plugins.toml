@@ -17,30 +17,24 @@ shell = "zsh"
 github = "romkatv/zsh-defer"
 
 [plugins.compinit]
-inline = '''
-autoload -Uz compinit && zsh-defer -c '
-  compinit
-  for def in $__compdef_queue; do compdef ${=def}; done
-  unset __compdef_queue
-'
-'''
-
-[plugins.colors]
-inline = "autoload -Uz colors && zsh-defer colors"
+# ロジック本体は ~/.config/zsh/compinit.zsh に分離 (sheldon inline + Tera +
+# zsh の 3 言語混在を避け、zsh -n で構文チェックできるようにするため)
+inline = 'source ${XDG_CONFIG_HOME:-$HOME/.config}/zsh/compinit.zsh'
 
 [plugins.zsh-completions]
 github = "zsh-users/zsh-completions"
 
+# autosuggestions / syntax-highlighting は ZLE widget を wrap するので
+# defer するとプロンプト表示後に「文字入力できるまでのラグ」が出る。
+# これらだけ sync ロードする (起動への影響は無視できるレベル、実測で確認済)。
 [plugins.zsh-autosuggestions]
 github = "zsh-users/zsh-autosuggestions"
-apply = ["defer"]
 
 [plugins.zsh-autosuggestions-ignore]
-inline = "zsh-defer -c 'ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)'"
+inline = "ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)"
 
 [plugins.zsh-syntax-highlighting]
 github = "zsh-users/zsh-syntax-highlighting"
-apply = ["defer"]
 
 [plugins.fzf]
 inline = '''
@@ -52,12 +46,6 @@ fi
 [plugins.fzf-tab]
 github = "Aloxaf/fzf-tab"
 apply = ["defer"]
-
-[plugins.zoxide]
-inline = 'eval "$(zoxide init zsh)"'
-
-[plugins.zoxide-aliases]
-inline = 'alias cd="z"'
 
 [plugins.eza-aliases]
 inline = '''
@@ -93,6 +81,14 @@ if [[ $options[zle] = on ]]; then
   eval "$(atuin init zsh --disable-up-arrow --disable-ctrl-r)"
 fi
 '''
+
+# zoxide は chpwd hook を登録するので starship/atuin より後ろに置く
+# (zoxide doctor の「最後で初期化せよ」警告を回避)
+[plugins.zoxide]
+inline = 'eval "$(zoxide init zsh)"'
+
+[plugins.zoxide-aliases]
+inline = 'alias cd="z"'
 
 [templates]
 defer = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"

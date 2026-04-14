@@ -1,0 +1,11 @@
+{{/*
+  chezmoi init 時に一度だけ profile を聞き、~/.config/chezmoi/chezmoi.toml に永続化する。
+  既存マシンで未設定の場合も `chezmoi init` を再実行すれば対話が走る。
+  profile は他テンプレートから `.profile` として参照できる。
+    - personal: 個人環境 (個人用ツールを含む)
+    - work    : 仕事環境 (個人ツールは除外)
+*/ -}}
+{{- $profile := promptChoiceOnce . "profile" "Profile" (list "personal" "work") -}}
+
+[data]
+profile = {{ $profile | quote }}

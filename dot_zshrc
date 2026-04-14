@@ -4,14 +4,17 @@
 # Add mise shims early so sheldon and other managed tools resolve correctly
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 
-# Queue compdef calls until deferred compinit runs
-typeset -ga __compdef_queue
-compdef() { __compdef_queue+=("${(j: :)@}") }
-
 eval "$(sheldon source)"
 
-# Defer mise activation; -c keeps the activation work off the first prompt
-zsh-defer -c 'source <(mise activate zsh)'
+# mise activate は sync で source する (defer すると プロンプト表示後に ~250ms の
+# 入力ラグ窓になる)。起動時間と引き換えに `mise use` 即反映と `[env]` エクスポート
+# を維持する。mise 不在時は起動を続ける (新マシン bootstrap 等で shell が立ち上がらない
+# 状況を避けるため)。
+if (( $+commands[mise] )); then
+  source <(mise activate zsh)
+else
+  print -u2 "zshrc: mise not found on PATH, skipping activate"
+fi
 
 export FZF_DEFAULT_COMMAND="fd --type f"
 export FZF_DEFAULT_OPTS="--height 40% --border"

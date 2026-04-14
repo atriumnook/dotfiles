@@ -1,6 +1,16 @@
 [settings]
 lockfile = true
 disable_backends = ["asdf", "vfox"]
+# mise 公式の env 計算キャッシュ。nested mise 呼び出しで効く
+# (起動時 hook-env への効果は実測で ~20-40ms と限定的だが TTL 1h で自動無効化、
+# リスク無しの公式機能なので保持)。
+# 詳細: https://mise.jdx.dev/configuration/settings.html
+env_cache = true
+
+[settings.hook_env]
+# cd 時のみ hook-env を走らせる (毎プロンプト 300ms ラグの対処)
+# 同ディレクトリでの `.mise.toml` 編集や `mise use` 反映には `cd .` が必要
+chpwd_only = true
 
 [settings.pipx]
 uvx = true
@@ -20,6 +30,7 @@ starship = "1"
 yazi = "26"
 zellij = "0"
 
+{{- /* TODO: macOS 追加時は CLI ツール群を OS ガード外へ出す */ -}}
 {{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (eq .chezmoi.osRelease.id "debian") }}
 # --- CLI Tools (WSL / Debian) ---
 bat = "0"
@@ -31,4 +42,8 @@ lazygit = "0"
 neovim = "0"
 ripgrep = "15"
 zoxide = "0"
+{{- if eq (get . "profile" | default "personal") "personal" }}
+# --- Personal profile only (仕事 PC では不要) ---
+gh = "2"
+{{- end }}
 {{- end }}
