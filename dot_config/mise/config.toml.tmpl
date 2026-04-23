@@ -29,8 +29,10 @@ delta = "0"
 starship = "1"
 yazi = "26"
 zellij = "0"
+usage = "3"
+ast-grep = "0"
 
-{{- /* TODO: macOS 追加時は CLI ツール群を OS ガード外へ出す */ -}}
+
 {{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (eq .chezmoi.osRelease.id "debian") }}
 # --- CLI Tools (WSL / Debian) ---
 bat = "0"
@@ -45,5 +47,4 @@ zoxide = "0"
 {{- if eq (get . "profile" | default "personal") "personal" }}
 # --- Personal profile only (仕事 PC では不要) ---
 gh = "2"
-{{- end }}
 {{- end }}

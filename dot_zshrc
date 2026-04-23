@@ -6,10 +6,9 @@ export PATH="$HOME/.local/share/mise/shims:$PATH"
 
 eval "$(sheldon source)"
 
-# mise activate は sync で source する (defer すると プロンプト表示後に ~250ms の
-# 入力ラグ窓になる)。起動時間と引き換えに `mise use` 即反映と `[env]` エクスポート
-# を維持する。mise 不在時は起動を続ける (新マシン bootstrap 等で shell が立ち上がらない
-# 状況を避けるため)。
+# mise activate は sync で source する (defer すると プロンプト表示後に ~250ms の入力ラグ窓になる)
+# 起動時間と引き換えに `mise use` 即反映と `[env]` エクスポートを維持する
+# mise 不在時は起動を続ける (新マシン bootstrap 等で shell が立ち上がらない状況を避けるため)
 if (( $+commands[mise] )); then
   source <(mise activate zsh)
 else
@@ -19,28 +18,17 @@ fi
 export FZF_DEFAULT_COMMAND="fd --type f"
 export FZF_DEFAULT_OPTS="--height 40% --border"
 
-# History
 HISTFILE="${ZDOTDIR:-$HOME}/.zsh_history"
 HISTSIZE=10000
 SAVEHIST=10000
+setopt HIST_FCNTL_LOCK
+setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS HIST_IGNORE_SPACE
 
-setopt HIST_FCNTL_LOCK                 # matches Home Manager locking behavior
-setopt APPEND_HISTORY SHARE_HISTORY HIST_IGNORE_DUPS
-setopt HIST_IGNORE_SPACE               # ignore commands prefixed with space
-
-unsetopt HIST_IGNORE_ALL_DUPS HIST_SAVE_NO_DUPS HIST_FIND_NO_DUPS \
-         HIST_EXPIRE_DUPS_FIRST EXTENDED_HISTORY
-
-# Write immediately; not set by Home Manager but semantically safe
-setopt INC_APPEND_HISTORY
-
-# Keybindings
 bindkey -e
 
-# Guard: bind only if terminfo key sequence is non-empty
+# terminfo キー列が空の環境で bindkey が誤ったキーを奪わないようガードする
 function _zsh_bind() { [[ -n "$1" ]] && bindkey "$1" "$2"; }
 
-# Home/End
 _zsh_bind "${terminfo[khome]}" beginning-of-line
 _zsh_bind "${terminfo[kend]}"  end-of-line
 bindkey "^[[H" beginning-of-line   # xterm
@@ -48,29 +36,22 @@ bindkey "^[OH" beginning-of-line   # application mode
 bindkey "^[[F" end-of-line         # xterm
 bindkey "^[OF" end-of-line         # application mode
 
-# Delete
 _zsh_bind "${terminfo[kdch1]}" delete-char
 bindkey "^[[3~" delete-char
 
-# Arrow keys
-bindkey "^[[A" up-line-or-history
-bindkey "^[[B" down-line-or-history
-bindkey "^[[C" forward-char
-bindkey "^[[D" backward-char
-
-# Ctrl+Left/Right
 _zsh_bind "${terminfo[kLFT5]}" backward-word
 _zsh_bind "${terminfo[kRIT5]}" forward-word
 bindkey "^[[1;5D" backward-word    # Ctrl+Left
 bindkey "^[[1;5C" forward-word     # Ctrl+Right
 
-# PageUp/PageDown
 _zsh_bind "${terminfo[kpp]}" up-line-or-history
 _zsh_bind "${terminfo[knp]}" down-line-or-history
 bindkey "^[[5~" up-line-or-history   # PageUp
 bindkey "^[[6~" down-line-or-history # PageDown
 
 unfunction _zsh_bind
+
+[[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
 
 # Re-source vite-plus for completion registration (PATH already set via .zshenv;
 # compdef stub is available here so vp completion will be queued and replayed)

@@ -1,15 +1,3 @@
-# `sheldon` configuration file
-# ----------------------------
-#
-# You can modify this file directly or you can use one of the following
-# `sheldon` commands which are provided to assist in editing the config file:
-#
-# - `sheldon add` to add a new plugin to the config file
-# - `sheldon edit` to open up the config file in the default editor
-# - `sheldon remove` to remove a plugin from the config file
-#
-# See the documentation for more https://github.com/rossmacarthur/sheldon#readme
-
 shell = "zsh"
 
 [plugins]
@@ -19,7 +7,12 @@ github = "romkatv/zsh-defer"
 [plugins.compinit]
 # ロジック本体は ~/.config/zsh/compinit.zsh に分離 (sheldon inline + Tera +
 # zsh の 3 言語混在を避け、zsh -n で構文チェックできるようにするため)
-inline = 'source ${XDG_CONFIG_HOME:-$HOME/.config}/zsh/compinit.zsh'
+inline = "source ${XDG_CONFIG_HOME:-$HOME/.config}/zsh/compinit.zsh"
+
+# mise completion は compdef を呼ぶので compinit の後ろ。
+# mise 不在マシン (bootstrap 直後) でも shell が落ちないようガードする。
+[plugins.mise-completion]
+inline = "(( $+commands[mise] )) && source <(mise completion zsh)"
 
 [plugins.zsh-completions]
 github = "zsh-users/zsh-completions"
@@ -84,11 +77,9 @@ fi
 
 # zoxide は chpwd hook を登録するので starship/atuin より後ろに置く
 # (zoxide doctor の「最後で初期化せよ」警告を回避)
+# --cmd cd は cd を zoxide 関数として再定義するので別途 alias cd=z は不要
 [plugins.zoxide]
-inline = 'eval "$(zoxide init zsh)"'
-
-[plugins.zoxide-aliases]
-inline = 'alias cd="z"'
+inline = '[[ "$CLAUDECODE" != "1" ]] && eval "$(zoxide init --cmd cd zsh)"'
 
 [templates]
 defer = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"
