@@ -1,57 +1,22 @@
 shell = "zsh"
 
-[plugins]
-[plugins.zsh-defer]
-github = "romkatv/zsh-defer"
-
-[plugins.compinit]
-# ロジック本体は ~/.config/zsh/compinit.zsh に分離 (sheldon inline + Tera +
-# zsh の 3 言語混在を避け、zsh -n で構文チェックできるようにするため)
-inline = "source ${XDG_CONFIG_HOME:-$HOME/.config}/zsh/compinit.zsh"
-
-# mise completion は compdef を呼ぶので compinit の後ろ。
-# mise 不在マシン (bootstrap 直後) でも shell が落ちないようガードする。
-[plugins.mise-completion]
-inline = "(( $+commands[mise] )) && source <(mise completion zsh)"
-
-[plugins.zsh-completions]
-github = "zsh-users/zsh-completions"
-
-# autosuggestions / syntax-highlighting は ZLE widget を wrap するので
-# defer するとプロンプト表示後に「文字入力できるまでのラグ」が出る。
-# これらだけ sync ロードする (起動への影響は無視できるレベル、実測で確認済)。
-[plugins.zsh-autosuggestions]
-github = "zsh-users/zsh-autosuggestions"
-
-[plugins.zsh-autosuggestions-ignore]
-inline = "ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)"
-
-[plugins.zsh-syntax-highlighting]
-github = "zsh-users/zsh-syntax-highlighting"
-
-[plugins.fzf]
-inline = '''
-if [[ $options[zle] = on ]]; then
-  source <(fzf --zsh)
-fi
-'''
-
-[plugins.fzf-tab]
-github = "Aloxaf/fzf-tab"
 apply = ["defer"]
 
-[plugins.eza-aliases]
-inline = '''
-alias eza="eza --icons=auto --git"
-alias ls="eza"
-alias ll="eza -l"
-alias la="eza -a"
-alias lt="eza --tree"
-alias lla="eza -la"
-'''
+[templates]
+defer = "{{ hooks | get: \"pre\" | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks | get: \"post\" | nl }}"
 
-[plugins.bat-aliases]
-inline = 'alias cat="bat --paging=never"'
+[plugins.zsh-defer]
+github = "romkatv/zsh-defer"
+apply = ["source"]
+
+[plugins.starship]
+inline = 'eval "$(starship init zsh)"'
+
+[plugins.autosuggest-config]
+inline = "ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)"
+
+[plugins.mise-completion]
+inline = "zsh-defer -c '(( $+commands[mise] )) && source <(mise completion zsh)'"
 
 [plugins.yazi]
 inline = '''
@@ -65,21 +30,37 @@ y() {
 }
 '''
 
-[plugins.starship]
-inline = 'eval "$(starship init zsh)"'
+[plugins.zsh-completions]
+github = "zsh-users/zsh-completions"
+
+[plugins.compinit]
+inline = "zsh-defer -c 'autoload -Uz compinit && compinit'"
+
+[plugins.fzf]
+inline = "zsh-defer -c 'source <(fzf --zsh)'"
+
+[plugins.fzf-tab]
+github = "Aloxaf/fzf-tab"
+
+[plugins.zsh-abbr]
+github = "olets/zsh-abbr"
+
+[plugins.zsh-config]
+local = "~/.config/zsh"
+use = ["alias.zsh"]
+
+[plugins.zsh-autosuggestions]
+github = "zsh-users/zsh-autosuggestions"
 
 [plugins.atuin]
 inline = '''
-if [[ $options[zle] = on ]]; then
-  eval "$(atuin init zsh --disable-up-arrow --disable-ctrl-r)"
-fi
+zsh-defer -c 'eval "$(atuin init zsh --disable-up-arrow --disable-ctrl-r)"'
 '''
 
-# zoxide は chpwd hook を登録するので starship/atuin より後ろに置く
-# (zoxide doctor の「最後で初期化せよ」警告を回避)
-# --cmd cd は cd を zoxide 関数として再定義するので別途 alias cd=z は不要
 [plugins.zoxide]
-inline = '[[ "$CLAUDECODE" != "1" ]] && eval "$(zoxide init --cmd cd zsh)"'
+inline = '''
+zsh-defer -c '[[ "$CLAUDECODE" != "1" ]] && eval "$(zoxide init --cmd cd zsh)"'
+'''
 
-[templates]
-defer = "{{ hooks?.pre | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks?.post | nl }}"
+[plugins.fast-syntax-highlighting]
+github = "zdharma-continuum/fast-syntax-highlighting"
