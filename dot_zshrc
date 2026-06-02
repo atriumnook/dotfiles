@@ -53,10 +53,4 @@ unfunction _zsh_bind
 
 [[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
 
-# Re-source vite-plus for completion registration (PATH already set via .zshenv;
-# compdef stub is available here so vp completion will be queued and replayed)
-if [[ -r "$HOME/.vite-plus/env" ]]; then
-  . "$HOME/.vite-plus/env"
-fi
-
 [[ -n $ZSH_PROFILE ]] && zprof
