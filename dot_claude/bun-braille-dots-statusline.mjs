@@ -62,9 +62,24 @@ function brailleBar(pct, width = 8) {
   return bar;
 }
 
-function fmt(label, pct) {
+// resets_at (Unix epoch 秒) からリセットまでの残り時間を適応単位で整形
+function fmtRemaining(resetsAt) {
+  if (resetsAt == null) return '';
+  let s = resetsAt - Math.floor(Date.now() / 1000);
+  if (s <= 0) return ''; // リセット済み・過去は非表示
+  const d = Math.floor(s / 86400); s -= d * 86400;
+  const h = Math.floor(s / 3600);  s -= h * 3600;
+  const m = Math.floor(s / 60);
+  if (d > 0) return `${d}d${h}h`;
+  if (h > 0) return `${h}h${m}m`;
+  return `${m}m`;
+}
+
+function fmt(label, pct, resetsAt) {
   const p = Math.round(pct);
-  return `${T65}${label}${R} ${gradient(pct)}${brailleBar(pct)}${R} ${T80}${p}%${R}`;
+  const base = `${T65}${label}${R} ${gradient(pct)}${brailleBar(pct)}${R} ${T80}${p}%${R}`;
+  const rem = fmtRemaining(resetsAt);
+  return rem ? `${base} ${T50}${rem}${R}` : base;
 }
 
 function branchColor(name) {
@@ -109,10 +124,10 @@ const ctx = data?.context_window?.used_percentage;
 if (ctx != null) parts.push(fmt('ctx', ctx));
 
 const five = data?.rate_limits?.five_hour?.used_percentage;
-if (five != null) parts.push(fmt('5h', five));
+if (five != null) parts.push(fmt('5h', five, data?.rate_limits?.five_hour?.resets_at));
 
 const week = data?.rate_limits?.seven_day?.used_percentage;
-if (week != null) parts.push(fmt('7d', week));
+if (week != null) parts.push(fmt('7d', week, data?.rate_limits?.seven_day?.resets_at));
 
 const line1 = parts.join(` ${T35}│${R} `);
 
