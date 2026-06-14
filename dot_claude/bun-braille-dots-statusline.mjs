@@ -19,6 +19,25 @@ const BR_FEAT    = '\x1b[38;2;38;222;129m';  // feat/*
 const BR_FIX     = '\x1b[38;2;255;145;77m';  // fix/hotfix
 const BR_RELEASE = '\x1b[38;2;179;136;255m'; // release/*
 
+// effort.level: braille 充填量(色非依存の第2チャネル)＋段階色でレベルを符号化。
+// ultracode はドキュメント上 xhigh として報告される場合があるため両方を定義し、
+// 未知値は EFFORT 外として生の文字列を中間色で表示する(将来値でも壊れない)。
+const EFFORT = {
+  low:       { abbr: 'lo',  cell: '⣀', tone: '\x1b[38;2;68;78;99m' },
+  medium:    { abbr: 'md',  cell: '⣤', tone: '\x1b[38;2;108;117;138m' },
+  high:      { abbr: 'hi',  cell: '⣶', tone: '\x1b[38;2;162;170;188m' },
+  xhigh:     { abbr: 'xh',  cell: '⣷', tone: '\x1b[38;2;200;206;220m' },
+  max:       { abbr: 'max', cell: '⣿', tone: '\x1b[38;2;179;136;255m' },
+  ultracode: { abbr: 'uc',  cell: '⣿', tone: '\x1b[38;2;255;128;191m' },
+};
+
+function effortSeg(level) {
+  if (level == null) return '';
+  const e = EFFORT[level];
+  if (!e) return `${T65}${level}${R}`; // 未知値フォールバック
+  return `${e.tone}${e.cell}${R} ${e.tone}${e.abbr}${R}`;
+}
+
 // Gradient stops: traffic-light semantics
 const G_LO  = [46, 230, 130];
 const G_MID = [255, 214, 0];
@@ -118,7 +137,8 @@ function parseDiffStat(raw) {
 
 const data = await Bun.stdin.json();
 const model = data?.model?.display_name ?? 'Claude';
-const parts = [`${T50}${model}${R}`];
+const effort = effortSeg(data?.effort?.level);
+const parts = [effort ? `${T50}${model}${R} ${effort}` : `${T50}${model}${R}`];
 
 const ctx = data?.context_window?.used_percentage;
 if (ctx != null) parts.push(fmt('ctx', ctx));
