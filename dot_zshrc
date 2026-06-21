@@ -51,6 +51,4 @@ bindkey "^[[6~" down-line-or-history # PageDown
 
 unfunction _zsh_bind
 
-[[ -s "$HOME/.bun/_bun" ]] && source "$HOME/.bun/_bun"
-
 [[ -n $ZSH_PROFILE ]] && zprof
