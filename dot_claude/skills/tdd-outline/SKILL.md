@@ -1,6 +1,6 @@
 ---
 name: tdd-outline
-description: Generate test case outlines (it.todo) based on requirements. Use when user says "generate test cases", "create test outline", "write test todos", or before implementing a new feature with TDD. Creates Vitest describe/it.todo structure without test logic.
+description: Generate test case outlines (it.todo) based on requirements. Use when user says "generate test cases", "create test outline", "write test todos", or before implementing a new feature with TDD.
 disable-model-invocation: true
 argument-hint: [feature description or requirements]
 ---
@@ -64,12 +64,38 @@ describe('<feature name>', () => {
 
 User invokes: `/tdd-outline ランキング表示機能。デフォルト7日間、上位20件、期間はフロントで変更可能`
 
-Expected output includes describe blocks for:
-- デフォルトの集計期間と件数
-- フロントから期間を変更した場合の挙動
-- データが存在しない場合
-- 上位20件を超えるデータの扱い
-- 不正な期間指定への対応
+Expected output:
+
+```typescript
+import { describe, it } from 'vitest';
+
+describe('ランキング表示', () => {
+  describe('デフォルト集計', () => {
+    // Intent: baseline behavior with no user input
+    it.todo('デフォルト期間(7日間)で上位20件が返ること');
+  });
+
+  describe('期間変更', () => {
+    // Intent: frontend-driven period override
+    it.todo('フロントから期間を変更した時、指定期間のランキングが返ること');
+  });
+
+  describe('境界値', () => {
+    // Intent: upper bound of result count
+    it.todo('上位20件を超えるデータが存在する時、20件のみ返ること');
+  });
+
+  describe('エラーケース', () => {
+    // Intent: guard against invalid period input
+    it.todo('不正な期間が指定された時、エラーが返ること');
+  });
+
+  describe('不変条件', () => {
+    // Intent: data integrity under all conditions
+    it.todo('データが存在しない時、空配列が返りエラーにならないこと');
+  });
+});
+```
 
 ## Troubleshooting
 

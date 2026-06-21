@@ -103,9 +103,31 @@ fix:
 3. 削除でデバッグ意図等の情報が失われる → fix を付けない
 4. フォーマッタ（Prettier 等）がコミット前に走る → `expandEnd` 不要、空行は自動整理される
 
+### 複数行 fix
+
+```yaml
+rule:
+  pattern: |
+    def foo($X):
+      $$$S
+fix: |-
+  def bar($X):
+    $$$S
+```
+
+インデントは元コードの位置に合わせて保持される。
+
 ## `any:` + fix の統合 / 分割
 
-`any:` 配下の全分岐で **同一の fix テンプレ + 同一メタ変数** が使えるなら 1 ルールに統合して良い。分岐ごとに fix が異なる場合は必ずルールを分割する（`any:` 内で分岐ごとの fix は書けない）。
+`any:` 配下の全分岐で **同一の fix テンプレ + 同一メタ変数** が使えるなら 1 ルールに統合して良い。分岐ごとに fix が異なる場合は必ずルールを分割する（`any:` 内で分岐ごとの fix は書けない）。同じ目的でもルール分割は許容される（id を `*-empty` / `*-nonempty` などで揃えると見通しが良い）。
+
+```yaml
+rule:
+  any:
+    - pattern: $ARR.filter($P).length === 0
+    - pattern: $ARR.filter($P).length == 0
+fix: '!$ARR.some($P)'   # 両分岐で共通のメタ変数 + 同一テンプレート
+```
 
 ### transform による記号反転の裏技
 
@@ -125,6 +147,61 @@ transform:
 ```
 
 実際には `any:` 分岐ごとに異なるメタ変数を束縛できないため、**素直に 2 ルール分割するのが推奨**（可読性・メンテ性も良い）。transform での統合は高度な使い方で、通常は不要。
+
+## transform
+
+マッチしたメタ変数をテキスト変換してから `fix` で使う。
+
+### replace (正規表現置換)
+
+```yaml
+transform:
+  NEW_NAME:
+    replace:
+      source: $NAME
+      replace: 'get(\w+)'
+      by: 'fetch$1'
+fix: $NEW_NAME($$$ARGS)
+```
+
+### substring (部分文字列)
+
+```yaml
+transform:
+  INNER:
+    substring:
+      source: $STR
+      startChar: 1
+      endChar: -1
+```
+
+負のインデックスは末尾から。Python のスライスと同じ。
+
+### convert (ケース変換)
+
+```yaml
+transform:
+  SNAKE:
+    convert:
+      source: $NAME
+      toCase: snakeCase
+      separatedBy: [caseChange]
+```
+
+対応ケース: `camelCase`, `snakeCase`, `kebabCase`, `pascalCase`, `upperCase`, `lowerCase`, `capitalize`
+
+### rewrite (実験的)
+
+メタ変数内のノードを rewriter ルールで再帰的に書き換える。
+
+```yaml
+transform:
+  REWRITTEN:
+    rewrite:
+      source: $$$BODY
+      rewriters: [migrate-api-call]
+      joinBy: "\n"
+```
 
 ## その他の fix 関連
 

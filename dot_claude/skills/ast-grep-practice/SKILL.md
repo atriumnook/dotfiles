@@ -1,6 +1,6 @@
 ---
 name: ast-grep-practice
-description: ast-grep をプロジェクト lint ツールとして運用するためのガイド。sgconfig.yml 設定、fix/rewrite ルール、constraints、transform、テスト、CI 統合、既存 linter との使い分けを扱う。汎用 linter で表現できないルールを ast-grep で書くときに使用。
+description: 汎用 linter（ESLint / oxlint / Biome / clippy 等）で表現できないコードパターンの検出・自動修正ルールを ast-grep で書くとき、または既存プロジェクトへの ast-grep 導入・CI 統合を行うときに使用。
 ---
 
 # ast-grep Practice
@@ -178,9 +178,7 @@ process.env.NODE_ENV
 
 ## fix (自動修正)
 
-### fix を付けるかどうかの判断
-
-`fix` は便利だが、付けると自動適用されるので意味論を変える危険がある。次の場合は **付けない**（検出のみにする）:
+次の場合は **fix を付けない**（検出のみにする）:
 
 - 書き換えで型安全性が変わる（例: `as any` → `as unknown` は型推論結果が変わる）
 - 副作用や評価順序が変わる可能性（短絡評価の有無、例外発生タイミング）
@@ -189,71 +187,13 @@ process.env.NODE_ENV
 
 迷ったら fix なしで note に「手動移行手順」を書く。fix を付けるのは「全置換しても安全」と確信できる場合に限る。
 
-### 基本
-
 ```yaml
 rule:
   pattern: console.log($ARG)
 fix: logger.info($ARG)
 ```
 
-メタ変数はそのまま `fix` テンプレート内で使える。マッチしなかったメタ変数は空文字になる。
-
-### 削除
-
-```yaml
-rule:
-  pattern: console.log($$$ARGS)
-fix: ''
-```
-
-`fix: ''` でマッチしたノードを削除する。ただし空行が残ることがある。**ステートメント終端 `;` や末尾カンマも一緒に消したい場合は必ず `expandEnd` を併用する**（後述「範囲拡張」）。空行が残るのが許容範囲なら expandEnd 不要。判断基準: 削除後にフォーマッタ（Prettier 等）が走るプロジェクトなら空行は自動整理されるので expandEnd 不要、走らないなら expandEnd 推奨。
-
-### `any:` で複数パターンを束ねるときの fix
-
-`any:` 配下の各分岐で **同一の fix テンプレート** が使えるなら 1 ルールに統合して良い:
-
-```yaml
-rule:
-  any:
-    - pattern: $ARR.filter($P).length === 0
-    - pattern: $ARR.filter($P).length == 0
-fix: '!$ARR.some($P)'   # 両分岐で共通のメタ変数 + 同一テンプレート
-```
-
-**分岐ごとに fix が異なる場合は必ずルールを分割する**（`any:` 内で分岐ごとの fix は書けない）。例: `=== 0` → `!some()`、`!== 0` → `some()` は別ルールにする。同じ目的でもルール分割は許容される（id を `*-empty` / `*-nonempty` などで揃えると見通しが良い）。
-
-### 複数行
-
-```yaml
-rule:
-  pattern: |
-    def foo($X):
-      $$$S
-fix: |-
-  def bar($X):
-    $$$S
-```
-
-インデントは元コードの位置に合わせて保持される。
-
-### 範囲拡張 (FixConfig)
-
-末尾のカンマなどを含めて削除したい場合:
-
-```yaml
-fix:
-  template: ''
-  expandEnd:
-    regex: ','
-```
-
-### CLI での簡易書き換え
-
-```bash
-ast-grep run --pattern 'oldFunc($$$ARGS)' --rewrite 'newFunc($$$ARGS)' --lang typescript .
-# --update-all で確認なしに一括適用
-```
+メタ変数はそのまま `fix` テンプレート内で使える。削除・範囲拡張(FixConfig)・`any:` 分割・複数行・CLI 書き換えの詳細は [references/rule-yaml.md](references/rule-yaml.md) 参照。
 
 ## constraints
 
@@ -282,58 +222,7 @@ constraints:
 
 ## transform
 
-マッチしたメタ変数をテキスト変換してから `fix` で使う。
-
-### replace (正規表現置換)
-
-```yaml
-transform:
-  NEW_NAME:
-    replace:
-      source: $NAME
-      replace: 'get(\w+)'
-      by: 'fetch$1'
-fix: $NEW_NAME($$$ARGS)
-```
-
-### substring (部分文字列)
-
-```yaml
-transform:
-  INNER:
-    substring:
-      source: $STR
-      startChar: 1
-      endChar: -1
-```
-
-負のインデックスは末尾から。Python のスライスと同じ。
-
-### convert (ケース変換)
-
-```yaml
-transform:
-  SNAKE:
-    convert:
-      source: $NAME
-      toCase: snakeCase
-      separatedBy: [caseChange]
-```
-
-対応ケース: `camelCase`, `snakeCase`, `kebabCase`, `pascalCase`, `upperCase`, `lowerCase`, `capitalize`
-
-### rewrite (実験的)
-
-メタ変数内のノードを rewriter ルールで再帰的に書き換える。
-
-```yaml
-transform:
-  REWRITTEN:
-    rewrite:
-      source: $$$BODY
-      rewriters: [migrate-api-call]
-      joinBy: "\n"
-```
+マッチしたメタ変数をテキスト変換してから `fix` で使う。`replace`（正規表現置換）/ `substring`（部分文字列）/ `convert`（ケース変換）/ `rewrite`（実験的、再帰書き換え）の 4 種がある。詳細は [references/rule-yaml.md](references/rule-yaml.md) 参照。
 
 ## utils (ユーティリティルール)
 
@@ -375,50 +264,17 @@ severity: warning
 
 ## テスト
 
-テストには 2 系統ある。混同しない:
-- **分類テスト** (`test --skip-snapshot-tests`): `valid` / `invalid` に並べたコードが正しく分類されるかだけを確認。CI で回すのはこちら。
-- **スナップショットテスト** (`test` / `test -U`): invalid コードへのマッチ位置や fix 適用結果を snapshot として固定し、回帰を検出。初回は `-U` で生成、以降は人間レビュー。CI 前に一度通す。
-
-### テストファイル形式
-
-テストファイル内の `id` がルールファイルの `id` と一致している必要がある。ファイル名は自由（慣例は `{rule-id}-test.yml`）。
-
-```yaml
-# rule-tests/no-direct-env-access-test.yml
-id: no-direct-env-access
-valid:
-  - getEnv('NODE_ENV')
-  - "function setup() { return getEnv('PORT') }"
-invalid:
-  - process.env.NODE_ENV
-  - process.env.PORT
-```
-
-### テスト実行
+テストには 2 系統ある:
+- **分類テスト** (`--skip-snapshot-tests`): `valid` / `invalid` の分類が正しいか確認。CI で回す。
+- **スナップショットテスト** (`test -U`): マッチ位置・fix 結果を固定して回帰検出。初回は `-U` で生成、人間レビュー後 commit。
 
 ```bash
-# 分類テスト (valid/invalid が正しいか)
-ast-grep test --skip-snapshot-tests
-
-# スナップショット生成・更新
-ast-grep test -U
-
-# スナップショット対話的レビュー
-ast-grep test --interactive
+ast-grep test --skip-snapshot-tests  # 分類テスト（CI 用）
+ast-grep test -U                     # スナップショット生成・更新
+ast-grep test --interactive          # スナップショット対話的レビュー
 ```
 
-テスト結果:
-- `.` : パス
-- `N` : ノイジー (false positive — valid コードにマッチ)
-- `M` : ミッシング (false negative — invalid コードにマッチしない)
-
-### ワークフロー
-
-1. `rule-tests/` にテストファイルを書く (Red)
-2. `rules/` にルールを書く (Green)
-3. `ast-grep test --skip-snapshot-tests` で確認
-4. `ast-grep test -U` でスナップショット生成
-5. スナップショットをレビューして commit
+テスト形式・複数行記法・スナップショット運用・よくある落とし穴は [references/testing.md](references/testing.md) 参照。
 
 ## CI 統合
 
@@ -451,25 +307,11 @@ dev 環境とツールを揃える（プロジェクトで pnpm を使うなら 
   run: npx ast-grep scan --error
 ```
 
-**severity と終了コード**:
-- `ast-grep scan` はデフォルトで `error` severity が 1 件でもあれば非ゼロ終了
-- `--error` を付けると `warning` / `hint` でも非ゼロ終了させられる（CI で warning も落としたい場合）
-- `--error=error` のように severity を指定して段階的に厳しくすることも可能
-- `--format json` で構造化出力（別ツール連携用）
+`--error` を付けると `warning` / `hint` でも非ゼロ終了する（省略時は `error` severity のみ非ゼロ終了）。詳細は [references/cli.md](references/cli.md) 参照。
 
 ## kind 名の調べ方
 
-kind 名は言語の Tree-sitter grammar に依存する。
-
-```bash
-# AST ダンプ（名前付きノードのみ、ルール記述に使う）
-ast-grep run --pattern 'YOUR_CODE' --lang typescript --debug-query=ast
-
-# CST ダンプ（全ノード、anonymous トークン含む）
-ast-grep run --pattern 'YOUR_CODE' --lang typescript --debug-query=cst
-```
-
-言語別の頻出 kind カタログは [references/kind-catalog.md](references/kind-catalog.md) 参照（TypeScript / Rust / Go / Python を網羅）。
+kind 名は言語の Tree-sitter grammar に依存する。不明なものは `--debug-query=ast` で確認する。言語別の頻出 kind カタログ・コマンド詳細は [references/kind-catalog.md](references/kind-catalog.md) / [references/cli.md](references/cli.md) 参照。
 
 ## 実践的なルール例
 
@@ -489,185 +331,17 @@ note: |
 
 `as any` のように「型アサーション」にマッチさせる場合、`$EXPR as any` が `as_expression` ノードとして動く。`$EXPR` がマッチするのは左辺全体なので、`JSON.parse(raw) as any` にも `(value as any)` にもマッチする。
 
-### TypeScript: deprecated API の書き換え
-
-```yaml
-id: migrate-old-api
-language: TypeScript
-severity: error
-rule:
-  pattern: oldClient.fetch($URL, $OPTS)
-fix: newClient.request($URL, $OPTS)
-message: oldClient.fetch は廃止。newClient.request に移行する。
-```
-
-### 特定 import の禁止
-
-```yaml
-id: no-lodash-import
-language: TypeScript
-severity: warning
-rule:
-  pattern: import $_ from 'lodash'
-message: lodash の全体 import を禁止。lodash/xxx を使う。
-fix: import $_ from 'lodash/xxx' // TODO: 正しいパスに修正
-```
-
-### TypeScript: React コンポーネント内の直接 fetch 禁止
-
-```yaml
-id: no-fetch-in-component
-language: TypeScript
-severity: warning
-rule:
-  pattern: fetch($$$ARGS)
-  inside:
-    any:
-      - kind: function_declaration
-        has:
-          field: return_type
-          pattern: JSX.Element
-      - kind: arrow_function
-        inside:
-          kind: variable_declarator
-          regex: '^[A-Z]'
-    stopBy: end
-message: コンポーネント内で直接 fetch しない。hooks か server action を使う。
-```
-
-### Rust: unwrap() の禁止
-
-```yaml
-id: no-unwrap
-language: Rust
-severity: warning
-rule:
-  pattern: $EXPR.unwrap()
-  not:
-    inside:
-      kind: function_item
-      regex: '#\[test\]'
-      stopBy: end
-message: テスト以外で unwrap() を使わない。? か expect() を使う。
-note: unwrap() は panic するため、本番コードでは避ける。
-```
-
-### Rust: unsafe ブロックの検出
-
-```yaml
-id: flag-unsafe-block
-language: Rust
-severity: warning
-rule:
-  kind: unsafe_block
-message: unsafe ブロック。安全性の根拠をコメントで示す。
-```
-
-### Rust: println! を log マクロに移行
-
-```yaml
-id: no-println-in-lib
-language: Rust
-severity: warning
-rule:
-  pattern: println!($$$ARGS)
-  not:
-    inside:
-      kind: function_item
-      regex: 'fn main'
-      stopBy: end
-message: ライブラリコードで println! を使わない。log::info! 等を使う。
-fix: log::info!($$$ARGS)
-files:
-  - "src/lib.rs"
-  - "src/**/mod.rs"
-  - "src/**/*.rs"
-ignores:
-  - "src/main.rs"
-  - "src/bin/**"
-```
-
-### Go: エラー無視の検出
-
-```yaml
-id: no-ignored-error
-language: Go
-severity: error
-rule:
-  kind: short_var_declaration
-  has:
-    kind: identifier
-    regex: '^_$'
-    field: left
-  has:
-    kind: call_expression
-    field: right
-    stopBy: end
-message: エラーを _ で無視しない。適切にハンドリングする。
-```
-
-### Go: defer で Close する忘れ防止
-
-```yaml
-id: defer-close-after-open
-language: Go
-severity: warning
-rule:
-  kind: short_var_declaration
-  has:
-    pattern: os.Open($PATH)
-    field: right
-    stopBy: end
-  not:
-    precedes:
-      pattern: defer $_.Close()
-      stopBy:
-        kind: return_statement
-message: os.Open の直後に defer Close() を入れる。
-```
-
-### Python: bare except の禁止
-
-```yaml
-id: no-bare-except
-language: Python
-severity: warning
-rule:
-  kind: except_clause
-  not:
-    has:
-      kind: identifier
-      stopBy: neighbor
-message: bare except を使わない。具体的な例外型を指定する。
-```
-
-### Python: print() をロガーに移行
-
-```yaml
-id: no-print-in-src
-language: Python
-severity: warning
-rule:
-  pattern: print($$$ARGS)
-  not:
-    inside:
-      kind: function_definition
-      regex: 'def main'
-      stopBy: end
-message: print() ではなく logger を使う。
-fix: logger.info($$$ARGS)
-files:
-  - "src/**"
-```
+TypeScript / Rust / Go / Python の実践例は [references/examples.md](references/examples.md) 参照。
 
 ## References
 
 ### 本 skill 内の詳細
 
-- [references/rule-yaml.md](references/rule-yaml.md) — ルール YAML 全フィールド・評価順序・メタ変数束縛スコープ・`any:` + fix の統合/分割・`$$$ARGS` 空マッチ等
+- [references/rule-yaml.md](references/rule-yaml.md) — ルール YAML 全フィールド・評価順序・メタ変数束縛スコープ・`any:` + fix の統合/分割・`$$$ARGS` 空マッチ・transform 全種・削除系 fix の判断フロー等
 - [references/testing.md](references/testing.md) — 分類テスト vs スナップショット、複数行コード記法、snapshot 運用
 - [references/cli.md](references/cli.md) — サブコマンド・フラグ全般、`--error` / exit code / `--format json`
 - [references/kind-catalog.md](references/kind-catalog.md) — 言語別 kind カタログ（TypeScript / Rust / Go / Python）
+- [references/examples.md](references/examples.md) — 言語別実践ルール例（TypeScript / Rust / Go / Python）
 
 ### 公式
 
