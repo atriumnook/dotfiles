@@ -5,15 +5,13 @@ apply = ["defer"]
 [templates]
 defer = "{{ hooks | get: \"pre\" | nl }}{% for file in files %}zsh-defer source \"{{ file }}\"\n{% endfor %}{{ hooks | get: \"post\" | nl }}"
 
+# defer 本体は自身を遅延できないため同期 source する
 [plugins.zsh-defer]
 github = "romkatv/zsh-defer"
 apply = ["source"]
 
 [plugins.starship]
 inline = 'eval "$(starship init zsh)"'
-
-[plugins.autosuggest-config]
-inline = "ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)"
 
 [plugins.mise-completion]
 inline = "zsh-defer -c '(( $+commands[mise] )) && source <(mise completion zsh)'"
@@ -49,14 +47,12 @@ github = "olets/zsh-abbr"
 local = "~/.config/zsh"
 use = ["alias.zsh"]
 
-[plugins.zsh-autosuggestions]
-github = "zsh-users/zsh-autosuggestions"
-
 [plugins.atuin]
 inline = '''
 zsh-defer -c 'eval "$(atuin init zsh --disable-up-arrow --disable-ctrl-r)"'
 '''
 
+# Claude Code 内では cd 上書きが邪魔になるため無効化
 [plugins.zoxide]
 inline = '''
 zsh-defer -c '[[ "$CLAUDECODE" != "1" ]] && eval "$(zoxide init --cmd cd zsh)"'
@@ -64,3 +60,10 @@ zsh-defer -c '[[ "$CLAUDECODE" != "1" ]] && eval "$(zoxide init --cmd cd zsh)"'
 
 [plugins.fast-syntax-highlighting]
 github = "zdharma-continuum/fast-syntax-highlighting"
+
+[plugins.zsh-autosuggestions]
+github = "zsh-users/zsh-autosuggestions"
+
+# デフォルトの clear widget を潰さないよう autosuggestions の後で append する
+[plugins.autosuggest-config]
+inline = "zsh-defer -c 'ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)'"
