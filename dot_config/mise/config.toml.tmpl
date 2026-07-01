@@ -1,16 +1,7 @@
 [settings]
+experimental = true
 lockfile = true
 disable_backends = ["asdf", "vfox"]
-# mise 公式の env 計算キャッシュ。nested mise 呼び出しで効く
-# (起動時 hook-env への効果は実測で ~20-40ms と限定的だが TTL 1h で自動無効化、
-# リスク無しの公式機能なので保持)。
-# 詳細: https://mise.jdx.dev/configuration/settings.html
-env_cache = true
-
-[settings.hook_env]
-# cd 時のみ hook-env を走らせる (毎プロンプト 300ms ラグの対処)
-# 同ディレクトリでの `.mise.toml` 編集や `mise use` 反映には `cd .` が必要
-chpwd_only = true
 
 [settings.pipx]
 uvx = true
@@ -33,6 +24,10 @@ usage = "3"
 ast-grep = "0"
 vp = "0"
 
+# AI
+claude = "latest"
+"github:microsoft/apm" = "0"
+"github:ogulcancelik/herdr" = "0"
 
 {{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (eq .chezmoi.osRelease.id "debian") }}
 # --- CLI Tools (WSL / Debian) ---
@@ -48,4 +43,6 @@ zoxide = "0"
 {{- if eq (get . "profile" | default "personal") "personal" }}
 # --- Personal profile only (仕事 PC では不要) ---
 gh = "2"
+codex = "latest"
+{{- end }}
 {{- end }}
