@@ -67,3 +67,6 @@ github = "zsh-users/zsh-autosuggestions"
 # デフォルトの clear widget を潰さないよう autosuggestions の後で append する
 [plugins.autosuggest-config]
 inline = "zsh-defer -c 'ZSH_AUTOSUGGEST_CLEAR_WIDGETS+=(bracketed-paste)'"
+
+[plugins.paste-config]
+inline = "zle_highlight+=(paste:none)"
