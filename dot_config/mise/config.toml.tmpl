@@ -1,3 +1,10 @@
+{{- $profile := get . "profile" | default "personal" -}}
+{{- $isPersonal := eq $profile "personal" -}}
+{{- $isWsl := .chezmoi.kernel.osrelease | lower | contains "microsoft" -}}
+{{- $isDebian := eq .chezmoi.osRelease.id "debian" -}}
+{{- $isWslOrDebian := or $isWsl $isDebian -}}
+{{- $isOmarchy := eq .chezmoi.hostname "omarchy" -}}
+
 [settings]
 experimental = true
 lockfile = true
@@ -29,7 +36,7 @@ claude = "latest"
 "github:microsoft/apm" = "0"
 "github:ogulcancelik/herdr" = "0"
 
-{{- if or (.chezmoi.kernel.osrelease | lower | contains "microsoft") (eq .chezmoi.osRelease.id "debian") }}
+{{- if $isWslOrDebian }}
 # --- CLI Tools (WSL / Debian) ---
 bat = "0"
 eza = "0"
@@ -40,11 +47,17 @@ lazygit = "0"
 neovim = "0"
 ripgrep = "15"
 zoxide = "0"
-{{- if eq (get . "profile" | default "personal") "personal" }}
-# --- Personal profile only (仕事 PC では不要) ---
+{{- end }}
+
+{{- if $isPersonal }}
+# --- Personal profile only ---
 gh = "2"
 # AI
 codex = "latest"
 antigravity-cli = "latest"
 {{- end }}
+
+{{- if $isOmarchy }}
+# --- This machine only ---
+dotnet = "8"
 {{- end }}

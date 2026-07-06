@@ -1,8 +1,18 @@
-{{- if not (stat (joinPath .chezmoi.homeDir ".local/share/omarchy")) }}
-.config/nvim/lua/plugins/all-themes.lua
-.config/nvim/lua/plugins/omarchy-theme-hotreload.lua
-.config/nvim/lua/plugins/symlink_theme.lua
-.config/nvim/plugin/after/transparency.lua
+{{- $isOmarchy := stat (joinPath .chezmoi.homeDir ".local/share/omarchy") -}}
+{{- if $isOmarchy }}
+.config/nvim/.gitignore
+.config/nvim/.neoconf.json
+.config/nvim/init.lua
+.config/nvim/lazy-lock.json
+.config/nvim/lazyvim.json
+.config/nvim/lua/config/autocmds.lua
+.config/nvim/lua/config/keymaps.lua
+.config/nvim/lua/config/lazy.lua
+.config/nvim/lua/config/options.lua
+.config/nvim/lua/plugins/disable-news-alert.lua
+.config/nvim/lua/plugins/snacks-animated-scrolling-off.lua
+.config/nvim/lua/plugins/theme.lua
+.config/nvim/stylua.toml
 {{- end }}
 
 # mise lockfile (auto-generated per machine)
