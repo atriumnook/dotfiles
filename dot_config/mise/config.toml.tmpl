@@ -1,63 +1,81 @@
-{{- $profile := get . "profile" | default "personal" -}}
+{{- $profile := get . "profile" | default "personal" | lower -}}
 {{- $isPersonal := eq $profile "personal" -}}
-{{- $isWsl := .chezmoi.kernel.osrelease | lower | contains "microsoft" -}}
-{{- $isDebian := eq .chezmoi.osRelease.id "debian" -}}
-{{- $isWslOrDebian := or $isWsl $isDebian -}}
-{{- $isOmarchy := eq .chezmoi.hostname "omarchy" -}}
+
+{{- $os := .chezmoi.os -}}
+{{- $isLinux := eq $os "linux" -}}
+{{- $isWindows := eq $os "windows" -}}
+
+{{- $kernel := get .chezmoi "kernel" | default (dict) -}}
+{{- $kernelRelease := get $kernel "osrelease" | default "" | lower -}}
+{{- $isWsl := and $isLinux (contains "microsoft" $kernelRelease) -}}
+
+{{- $osRelease := get .chezmoi "osRelease" | default (dict) -}}
+{{- $distroId := get $osRelease "id" | default "" | lower -}}
+{{- $distroIdLike := get $osRelease "idLike" | default "" | lower -}}
+
+{{- $isDebianFamily := and
+      $isLinux
+      (or
+        (eq $distroId "debian")
+        (eq $distroId "ubuntu")
+        (contains "debian" $distroIdLike)
+      )
+-}}
+
+{{- $isWslOrDebian := or $isWsl $isDebianFamily -}}
+{{- $isOmarchy := eq (.chezmoi.hostname | lower) "omarchy" -}}
 
 [settings]
-experimental = true
 lockfile = true
 disable_backends = ["asdf", "vfox"]
-
-[settings.pipx]
-uvx = true
 
 [tools]
 # --- Runtimes ---
 node = "26"
 bun = "1"
+python = "3.13"
 uv = "0"
 
-# --- CLI Tools (cross-platform) ---
-"github:rossmacarthur/sheldon" = "0"
-atuin = "18"
-chezmoi = "2"
-delta = "0"
-starship = "1"
-yazi = "26"
-zellij = "0"
-usage = "3"
+# --- CLI Tools: Windows / Linux ---
 ast-grep = "0"
-vp = "0"
-
-# AI
-claude = "latest"
-"github:microsoft/apm" = "0"
-"github:ogulcancelik/herdr" = "0"
-
-{{- if $isWslOrDebian }}
-# --- CLI Tools (WSL / Debian) ---
-bat = "0"
-eza = "0"
+atuin = "18"
+delta = "0"
 fd = "10"
 fzf = "0"
 jq = "1"
+ripgrep = "15"
+starship = "1"
+usage = "3"
+yazi = "26"
+
+# --- AI Tools ---
+claude = "latest"
+apm = "0"
+"npm:hunkdiff" = "0"
+"github:tomasz-tomczyk/crit" = "0"
+
+{{ if $isLinux }}
+sheldon = "0"
+"github:ogulcancelik/herdr" = "0"
+{{ end }}
+
+{{ if $isWslOrDebian }}
+bat = "0"
+eza = "0"
 lazygit = "0"
 neovim = "0"
-ripgrep = "15"
 zoxide = "0"
-{{- end }}
+{{ end }}
 
-{{- if $isPersonal }}
-# --- Personal profile only ---
-gh = "2"
+{{ if $isPersonal }}
+github-cli = "2"
+buf = "1"
+
 # AI
 codex = "latest"
 antigravity-cli = "latest"
-{{- end }}
+{{ end }}
 
-{{- if $isOmarchy }}
-# --- This machine only ---
+{{ if $isOmarchy }}
 dotnet = "8"
-{{- end }}
+{{ end }}
