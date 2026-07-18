@@ -1,0 +1,40 @@
+host: "127.0.0.1"
+port: 8317
+
+tls:
+  enable: false
+  cert: ""
+  key: ""
+
+remote-management:
+  allow-remote: false
+  secret-key: ""
+  disable-control-panel: true
+
+auth-dir: "~/.cli-proxy-api"
+
+api-keys:
+  - {{ include "dot_config/cli-proxy-api/encrypted_private_client-key.age" | decrypt | trim | quote }}
+
+debug: false
+logging-to-file: false
+usage-statistics-enabled: false
+
+request-retry: 3
+
+routing:
+  strategy: "round-robin"
+  session-affinity: false
+
+codex:
+  identity-confuse: false
+
+ws-auth: true
+
+payload:
+  default:
+    - models:
+        - name: "gpt-*"
+          protocol: "codex"
+      params:
+        "reasoning.effort": "high"
