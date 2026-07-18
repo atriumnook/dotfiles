@@ -6,12 +6,22 @@ Chezmoi で管理する dotfiles（Omarchy / WSL / Debian）
 
 > 前提: [mise](https://mise.jdx.dev) をインストール済みであること
 
+秘密ファイル（cli-proxy-api の API キー等）は age で暗号化されているため、
+先に Bitwarden のセキュアノート `chezmoi-age-key` から age 秘密鍵を復元する。
+
 ```bash
-mise install chezmoi
+mise install chezmoi bitwarden
+export BW_SESSION=$(bw unlock --raw)   # 未ログインなら先に bw login
+mkdir -p ~/.config/chezmoi
+bw get notes chezmoi-age-key > ~/.config/chezmoi/key.txt
+chmod 600 ~/.config/chezmoi/key.txt
+
 chezmoi init https://github.com/atriumnook/dotfiles
 chezmoi apply
 mise install
 ```
+
+Windows など秘密ファイルを配布しないマシン（`.chezmoiignore.tmpl` で除外済み）では鍵の復元は不要。
 
 ## Windows Terminal
 
