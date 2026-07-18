@@ -15,6 +15,13 @@
 .config/nvim/stylua.toml
 {{- end }}
 
+{{- if eq .chezmoi.os "windows" }}
+.config/cli-proxy-api/**
+{{- else }}
+Documents/**
+.chezmoiscripts/20-configure-powershell-profile.ps1
+{{- end }}
+
 # mise lockfile (auto-generated per machine)
 .config/mise/mise.lock
 
