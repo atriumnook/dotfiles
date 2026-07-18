@@ -77,6 +77,8 @@ bitwarden = "2026.6.0"
 # AI
 codex = "latest"
 antigravity-cli = "latest"
+{{ end }}
+{{ if and $isPersonal $isLinux }}
 "github:router-for-me/CLIProxyAPI" = "7"
 {{ end }}
 
