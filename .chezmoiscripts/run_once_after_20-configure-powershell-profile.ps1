@@ -31,25 +31,6 @@ if ($null -eq $Content) {
     $Content = ""
 }
 
-# Remove obsolete OpenSpec block.
-$Content = $Content -replace (
-    '(?ms)^# OPENSPEC:START.*?' +
-    '^# OPENSPEC:END\s*'
-), ''
-
-# Remove obsolete direct mise initialization.
-$Content = $Content -replace (
-    '(?m)^\s*# mise\s*\r?\n' +
-    '^\s*\(&mise activate pwsh\) \| Out-String \| Invoke-Expression\s*\r?\n?'
-), ''
-
-# Remove obsolete ClaudeX loader.
-$Content = $Content -replace (
-    '(?ms)^# ClaudeX: Windows Claude Code using CLIProxyAPI in WSL\s*' +
-    '.*?' +
-    '^\}\s*'
-), ''
-
 # Replace an older copy of our own loader.
 $Content = $Content -replace (
     '(?ms)^# USER-CONFIG:START.*?' +
