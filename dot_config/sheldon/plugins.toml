@@ -45,7 +45,7 @@ github = "olets/zsh-abbr"
 
 [plugins.zsh-config]
 local = "~/.config/zsh"
-use = ["alias.zsh"]
+use = ["alias.zsh", "functions/*.zsh"]
 
 [plugins.atuin]
 inline = '''

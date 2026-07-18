@@ -29,3 +29,7 @@ abbr "gsn"="git show --name-status"
 abbr "gdn"="git diff --name-status origin/main"
 abbr "t"="tig"
 abbr "lg"="lazygit"
+
+# Claude Code
+abbr "clauded"="claude --dangerously-skip-permissions"
+abbr "claudexd"="claudex --dangerously-skip-permissions"
