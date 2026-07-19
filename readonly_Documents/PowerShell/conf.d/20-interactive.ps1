@@ -1,7 +1,18 @@
+# Prompt and line editing require an interactive console with unredirected I/O.
+# Skip them for Codex Actions, CI, and other non-interactive hosts.
+$IsInteractiveConsole =
+    $Host.Name -eq "ConsoleHost" -and
+    -not [Console]::IsInputRedirected -and
+    -not [Console]::IsOutputRedirected
+
+if (-not $IsInteractiveConsole) {
+    return
+}
+
 # Starship prompt
 $StarshipCommand = Get-Command starship.exe -ErrorAction SilentlyContinue
 
-if ($null -ne $StarshipCommand) {
+if ($null -ne $StarshipCommand -and $env:TERM -ne "dumb") {
     Invoke-Expression (& $StarshipCommand.Source init powershell)
 }
 
