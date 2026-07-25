@@ -61,6 +61,11 @@ zsh-defer -c '[[ "$CLAUDECODE" != "1" ]] && eval "$(zoxide init --cmd cd zsh)"'
 [plugins.fast-syntax-highlighting]
 github = "zdharma-continuum/fast-syntax-highlighting"
 
+# abbr は実コマンドとして解決されず未知トークン(赤)になるため、
+# zsh-abbr と fast-syntax-highlighting の両方より後に読み込んで着色を補う
+[plugins.fast-abbr-highlighting]
+github = "5A6F65/fast-abbr-highlighting"
+
 [plugins.zsh-autosuggestions]
 github = "zsh-users/zsh-autosuggestions"
 
