@@ -32,6 +32,6 @@ fi
 
 ps_script="${logo_block}\$t1 = New-BTText -Text '$title_ps'; \$t2 = New-BTText -Text '$message_ps'; \$b = New-BTBinding -Children \$t1,\$t2${binding_logo}; \$v = New-BTVisual -BindingGeneric \$b; \$c = New-BTContent -Visual \$v; Submit-BTNotification -Content \$c"
 
-powershell.exe -NoProfile -Command "$ps_script" 2>/dev/null &
+/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "$ps_script" 2>/dev/null &
 
 exit 0
