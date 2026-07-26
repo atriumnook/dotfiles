@@ -1,6 +1,14 @@
 # Startup profiling (opt-in: ZSH_PROFILE=1 zsh)
 [[ -n $ZSH_PROFILE ]] && zmodload zsh/zprof
 
+# WSL が引き継ぐ Windows 側 PATH は drvfs 上にあり、未解決語のコマンド探索で
+# 1 ディレクトリあたり数 ms かかる。fast-syntax-highlighting が打鍵ごとに探索するため
+# 49 件のままだと 1 文字約 100ms になる。GUI エディタの 2 件だけ残して落とす。
+# mise activate より前に行うこと(mise は起動時の PATH を退避し、以後 hook-env が
+# 毎プロンプトそこから再構成するため、後から削っても元に戻る)。
+# 他の Windows コマンドは alias.zsh で絶対パスの別名にしてある。
+path=( ${path:#/mnt/*} ${(M)path:#*/Programs/(Microsoft VS Code|Zed)/bin} )
+
 # Add mise shims early so sheldon and other managed tools resolve correctly
 export PATH="$HOME/.local/share/mise/shims:$PATH"
 

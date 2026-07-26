@@ -6,6 +6,14 @@ alias lt="eza --tree"
 alias lla="eza -la"
 alias cat="bat --paging=never"
 
+# Windows 側コマンドは PATH に足さず絶対パスの別名にする。
+# PATH に 1 ディレクトリ足すごとに打鍵レイテンシが数 ms 増えるが、別名は増えない
+# (dot_zshrc の path フィルタを参照)。
+# 注意: 別名は対話シェル限定。スクリプトから呼ぶ場合は絶対パスを直接書くこと。
+alias explorer.exe="/mnt/c/WINDOWS/explorer.exe"
+alias clip.exe="/mnt/c/WINDOWS/system32/clip.exe"
+alias pwsh="/mnt/c/Program\ Files/PowerShell/7/pwsh.exe"
+
 # abbr はこのファイルを唯一の定義元とするため session スコープで宣言する。
 # 既定の user スコープはストア(~/.config/zsh-abbr/user-abbreviations)へ永続化され、
 # 次回起動時に「It already has an expansion」で全行が no-op になるうえ、
