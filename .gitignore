@@ -1,0 +1,6 @@
+# マシン固有設定(共有しない)
+/.config/mise/config.local.toml
+/.config/mise/miserc.toml
+
+# mise lockfile(マシンごとに自動生成)
+/.config/mise/mise.lock

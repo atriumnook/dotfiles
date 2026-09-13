@@ -1,0 +1,3 @@
+# マシンクラス=omarchy(Arch/omarchy。CLI の多くは pacman が提供するため mise では最小)
+[tools]
+dotnet = "8"

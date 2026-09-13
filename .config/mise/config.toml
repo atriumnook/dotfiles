@@ -1,0 +1,79 @@
+# ── mise グローバル設定(mise bootstrap 一本化。旧 chezmoi config.toml.tmpl の後継)──
+# profile(personal/work)× マシンクラス(omarchy/wsldebian)は environment で選択。
+# 各マシンの ~/.config/mise/miserc.toml に env=["personal","omarchy"] 等で宣言する。
+# 各マシンの ~/.config/mise/config.toml は本ファイルへの symlink。
+# dotfiles.root は mise 既定の ~/.dotfiles を使用(設定不要)。
+
+[settings]
+lockfile = true
+disable_backends = ["asdf", "vfox"]
+minimum_release_age_excludes = ["claude", "codex", "antigravity-cli"]
+
+# omarchy / システム管理下のパスを history の capture/autosave から恒久除外
+[history]
+exclude = ["~/.config/hypr/**", "~/.local/share/omarchy/**"]
+
+[tools]
+# --- Runtimes ---
+node = "26"
+bun = "1"
+uv = "0"
+# --- CLI(全 OS 共通)---
+age = "1"
+ast-grep = "0"
+atuin = "18"
+chezmoi = "2"          # 移行期間の安全網。Phase 4 完了時に削除
+delta = "0"
+fd = "10"
+fzf = "0"
+jq = "1"
+ripgrep = "15"
+starship = "1"
+usage = "3"
+yazi = "26"
+# --- AI ---
+claude = "latest"
+apm = "0"
+"npm:hunkdiff" = "0"
+"github:tomasz-tomczyk/crit" = "0"
+"github:yusukebe/ax" = "0"
+# --- Linux 限定(旧 $isLinux)---
+sheldon = { version = "0", os = "linux" }
+"github:ogulcancelik/herdr" = { version = "0", os = "linux" }
+
+[dotfiles]
+"~/.claude/CLAUDE.md" = { mode = "symlink" }
+"~/.claude/bun-braille-dots-statusline.mjs" = { mode = "symlink" }
+"~/.claude/bun-file-suggestion.mjs" = { mode = "symlink" }
+"~/.claude/hooks/_lib.sh" = { mode = "symlink" }
+"~/.claude/hooks/executable-guard-secrets.sh" = { mode = "symlink" }
+"~/.claude/hooks/executable-notify-linux.sh" = { mode = "symlink" }
+"~/.claude/hooks/executable-notify-windows.sh" = { mode = "symlink" }
+"~/.claude/hooks/executable-notify.sh" = { mode = "symlink" }
+"~/.claude/hooks/executable-pre-bash-policy.sh" = { mode = "symlink" }
+"~/.claude/hooks/executable-pre-compact.sh" = { mode = "symlink" }
+"~/.claude/hooks/executable-scan-secrets.sh" = { mode = "symlink" }
+"~/.claude/hooks/notify-icon.png" = { mode = "symlink" }
+"~/.claude/output-styles/ELI5.md" = { mode = "symlink" }
+"~/.claude/settings.json" = { mode = "symlink" }
+"~/.claude/skills/html-artifact/SKILL.md" = { mode = "symlink" }
+"~/.config/Code/User/keybindings.json" = { mode = "symlink" }
+"~/.config/Code/User/settings.json" = { mode = "symlink" }
+"~/.config/ghostty/config" = { mode = "symlink" }
+"~/.config/ghostty/keybind.conf" = { mode = "symlink" }
+"~/.config/ghostty/local.conf" = { mode = "symlink" }
+"~/.config/nvim/lua/plugins/extras.lua" = { mode = "symlink" }
+"~/.config/nvim/lua/plugins/yazi.lua" = { mode = "symlink" }
+"~/.config/sheldon/plugins.toml" = { mode = "symlink" }
+"~/.config/starship.toml" = { mode = "symlink" }
+"~/.config/yazi/yazi.toml" = { mode = "symlink" }
+"~/.config/zsh/alias.zsh" = { mode = "symlink" }
+"~/.config/zsh/functions/claudex.zsh" = { mode = "symlink" }
+"~/.gitconfig" = { mode = "symlink" }
+"~/.zprofile" = { mode = "symlink" }
+"~/.zshrc" = { mode = "symlink" }
+"~/.config/mise/config.toml" = { mode = "symlink" }
+"~/.config/mise/config.personal.toml" = { mode = "symlink" }
+"~/.config/mise/config.work.toml" = { mode = "symlink" }
+"~/.config/mise/config.omarchy.toml" = { mode = "symlink" }
+"~/.config/mise/config.wsldebian.toml" = { mode = "symlink" }

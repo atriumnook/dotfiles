@@ -1,0 +1,22 @@
+# マシンクラス=wsldebian(WSL または Debian 系。omarchy が提供しない CLI を mise で補う。旧 $isWslOrDebian)
+[tools]
+bat = "0"
+eza = "0"
+lazygit = "0"
+neovim = "0"
+zoxide = "0"
+
+# omarchy 管理外の機では nvim 設定一式も配布(omarchy 機では未ロードなので触れない)
+[dotfiles]
+"~/.config/nvim/.gitignore" = { mode = "symlink" }
+"~/.config/nvim/.neoconf.json" = { mode = "symlink" }
+"~/.config/nvim/init.lua" = { mode = "symlink" }
+"~/.config/nvim/lazy-lock.json" = { mode = "symlink" }
+"~/.config/nvim/lazyvim.json" = { mode = "symlink" }
+"~/.config/nvim/lua/config/autocmds.lua" = { mode = "symlink" }
+"~/.config/nvim/lua/config/keymaps.lua" = { mode = "symlink" }
+"~/.config/nvim/lua/config/lazy.lua" = { mode = "symlink" }
+"~/.config/nvim/lua/config/options.lua" = { mode = "symlink" }
+"~/.config/nvim/lua/plugins/disable-news-alert.lua" = { mode = "symlink" }
+"~/.config/nvim/lua/plugins/snacks-animated-scrolling-off.lua" = { mode = "symlink" }
+"~/.config/nvim/stylua.toml" = { mode = "symlink" }

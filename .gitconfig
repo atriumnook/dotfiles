@@ -35,3 +35,9 @@
 
 [alias]
     nb = "!f(){ \\\n  echo \"from: $(git branch --show-current)\"; \\\n  t=$(printf \"feature\\nbugfix\\nhotfix\\nrelease\\nchore\\n\" | fzf --no-sort --prompt=\"type > \"); \\\n  [ -z \"$t\" ] && echo \"cancelled\" && exit 1; \\\n  printf \"name: \"; read -r n; \\\n  [ -z \"$n\" ] && echo \"name is required\" && exit 1; \\\n  case \"$n\" in \\\n    *\" \"*|*/|*\"..\"*) echo \"invalid name\"; exit 1 ;; \\\n  esac; \\\n  git switch -c \"$t/$n\"; \\\n}; f"
+[credential "https://github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+	helper = 
+	helper = !/usr/bin/gh auth git-credential
