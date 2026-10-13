@@ -1,0 +1,17 @@
+# OS=linux 専用の dotfiles(miserc.toml の env に "linux" を含めたマシンで有効)。
+# 全 OS 共通分は conf.d/10-dotfiles.toml。
+[dotfiles]
+"~/.zshrc" = { mode = "symlink" }
+"~/.zprofile" = { mode = "symlink" }
+"~/.config/zsh/alias.zsh" = { mode = "symlink" }
+"~/.config/zsh/functions/claudex.zsh" = { mode = "symlink" }
+"~/.config/sheldon/plugins.toml" = { mode = "symlink" }
+"~/.config/yazi/yazi.toml" = { mode = "symlink" }
+"~/.config/ghostty/config" = { mode = "symlink" }
+"~/.config/ghostty/keybind.conf" = { mode = "symlink" }
+"~/.config/ghostty/local.conf" = { mode = "symlink" }
+"~/.config/Code/User/keybindings.json" = { mode = "symlink" }
+"~/.config/Code/User/settings.json" = { mode = "symlink" }
+# omarchy が nvim 本体を提供する機でも配布する追加プラグイン
+"~/.config/nvim/lua/plugins/extras.lua" = { mode = "symlink" }
+"~/.config/nvim/lua/plugins/yazi.lua" = { mode = "symlink" }

@@ -1,0 +1,27 @@
+# OS=windows 専用の dotfiles(miserc.toml の env に "windows" を含めたマシンで有効)。
+#
+# PowerShell profile は「conf.d/*.ps1 を順に dot-source するローダー」だけを block で注入し、
+# 中身は Documents/PowerShell/conf.d/ の個別ファイルで管理する(旧 chezmoi run_once の移植)。
+# profile 内のユーザー記述は block の外なので保持される。
+#
+# 移行時の注意: 旧 chezmoi が注入した `# USER-CONFIG:START ... # USER-CONFIG:END`
+# ブロックが profile に残っていると、ローダーが二重になる。初回の apply 前に README の
+# 手順で旧ブロックを削除すること。
+[dotfiles]
+"~/Documents/PowerShell/conf.d/10-mise.ps1" = { mode = "copy" }
+"~/Documents/PowerShell/conf.d/20-interactive.ps1" = { mode = "copy" }
+
+"~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1/loader" = { block = '''
+$ProfileConfigDirectory = Join-Path $PSScriptRoot "conf.d"
+
+if (Test-Path -LiteralPath $ProfileConfigDirectory) {
+    Get-ChildItem `
+        -LiteralPath $ProfileConfigDirectory `
+        -Filter "*.ps1" `
+        -File |
+        Sort-Object Name |
+        ForEach-Object {
+            . $_.FullName
+        }
+}
+''' }

@@ -1,7 +1,12 @@
-# ── mise グローバル設定(mise bootstrap 一本化。旧 chezmoi config.toml.tmpl の後継)──
-# profile(personal/work)× マシンクラス(omarchy/wsldebian)は environment で選択。
-# 各マシンの ~/.config/mise/miserc.toml に env=["personal","omarchy"] 等で宣言する。
-# 各マシンの ~/.config/mise/config.toml は本ファイルへの symlink。
+# ── mise グローバル設定(dotfiles 管理分)──
+# ~/.config/mise/conf.d/10-dotfiles.toml として配置される。
+# ~/.config/mise/config.toml は omarchy の mise ラッパー(`mise use -g`)や手動の
+# `mise use -g` が書き込む machine-local ファイルなので、ここでは管理しない。
+#
+# 有効化する environment は各マシンの ~/.config/mise/miserc.toml で宣言する:
+#   profile : personal / work
+#   OS      : linux / windows
+#   class   : omarchy / wsldebian
 # dotfiles.root は mise 既定の ~/.dotfiles を使用(設定不要)。
 
 [settings]
@@ -22,7 +27,7 @@ uv = "0"
 age = "1"
 ast-grep = "0"
 atuin = "18"
-chezmoi = "2"          # 移行期間の安全網。Phase 4 完了時に削除
+chezmoi = "2"          # 移行期間の安全網。Windows 移行完了後に削除
 delta = "0"
 fd = "10"
 fzf = "0"
@@ -41,6 +46,8 @@ apm = "0"
 sheldon = { version = "0", os = "linux" }
 "github:ogulcancelik/herdr" = { version = "0", os = "linux" }
 
+# ── dotfiles(全 OS 共通分。OS 固有分は config.linux.toml / config.windows.toml)──
+# source を省略すると dotfiles.root(~/.dotfiles)配下の同パスが参照される。
 [dotfiles]
 "~/.claude/CLAUDE.md" = { mode = "symlink" }
 "~/.claude/bun-braille-dots-statusline.mjs" = { mode = "symlink" }
@@ -55,25 +62,20 @@ sheldon = { version = "0", os = "linux" }
 "~/.claude/hooks/executable-scan-secrets.sh" = { mode = "symlink" }
 "~/.claude/hooks/notify-icon.png" = { mode = "symlink" }
 "~/.claude/output-styles/ELI5.md" = { mode = "symlink" }
-"~/.claude/settings.json" = { mode = "symlink" }
 "~/.claude/skills/html-artifact/SKILL.md" = { mode = "symlink" }
-"~/.config/Code/User/keybindings.json" = { mode = "symlink" }
-"~/.config/Code/User/settings.json" = { mode = "symlink" }
-"~/.config/ghostty/config" = { mode = "symlink" }
-"~/.config/ghostty/keybind.conf" = { mode = "symlink" }
-"~/.config/ghostty/local.conf" = { mode = "symlink" }
-"~/.config/nvim/lua/plugins/extras.lua" = { mode = "symlink" }
-"~/.config/nvim/lua/plugins/yazi.lua" = { mode = "symlink" }
-"~/.config/sheldon/plugins.toml" = { mode = "symlink" }
 "~/.config/starship.toml" = { mode = "symlink" }
-"~/.config/yazi/yazi.toml" = { mode = "symlink" }
-"~/.config/zsh/alias.zsh" = { mode = "symlink" }
-"~/.config/zsh/functions/claudex.zsh" = { mode = "symlink" }
 "~/.gitconfig" = { mode = "symlink" }
-"~/.zprofile" = { mode = "symlink" }
-"~/.zshrc" = { mode = "symlink" }
-"~/.config/mise/config.toml" = { mode = "symlink" }
+
+# settings.json は Claude Code 自身が書き換える(model / enabledPlugins 等)ため
+# symlink にせず、repo 側のキーだけを実ファイルへ merge する。
+# アプリが追加したキーは保持され、repo 側にあるキーは apply で repo の値に戻る。
+"~/.claude/settings.json/shared" = { merge = true }
+
+# mise 設定自身の配置
+"~/.config/mise/conf.d/10-dotfiles.toml" = { mode = "symlink" }
 "~/.config/mise/config.personal.toml" = { mode = "symlink" }
 "~/.config/mise/config.work.toml" = { mode = "symlink" }
 "~/.config/mise/config.omarchy.toml" = { mode = "symlink" }
 "~/.config/mise/config.wsldebian.toml" = { mode = "symlink" }
+"~/.config/mise/config.linux.toml" = { mode = "symlink" }
+"~/.config/mise/config.windows.toml" = { mode = "symlink" }
