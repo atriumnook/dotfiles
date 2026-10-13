@@ -1,0 +1,12 @@
+{
+  "name": "atnook-dotfiles",
+  "owner": { "name": "atnook" },
+  "metadata": { "description": "Claude Code plugins managed in atnook's dotfiles" },
+  "plugins": [
+    {
+      "name": "prompt-rail",
+      "source": "./plugins/prompt-rail",
+      "description": "A rail of this session's prompts above the prompt input, in the style of beUI's Preview Rail: hover a tick to preview a prompt, click it to jump there."
+    }
+  ]
+}

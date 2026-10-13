@@ -4,3 +4,6 @@
 
 # mise lockfile(マシンごとに自動生成)
 /.config/mise/mise.lock
+
+# Claude Code がプラグイン読み込み時に書き出す型定義(バージョンごとに再生成)
+/.claude/marketplace/plugins/*/.claude-plugin/types/

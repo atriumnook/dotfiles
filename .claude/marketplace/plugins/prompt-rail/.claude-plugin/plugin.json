@@ -1,0 +1,9 @@
+{
+  "name": "prompt-rail",
+  "version": "0.1.0",
+  "description": "A rail of this session's prompts above the prompt input, in the style of beUI's Preview Rail: hover a tick to preview a prompt, click it to jump there.",
+  "author": { "name": "atnook" },
+  "license": "MIT",
+  "keywords": ["navigation", "transcript", "prompts", "function-hooks"],
+  "types": "./types/prompt-rail.d.ts"
+}
