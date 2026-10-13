@@ -64,8 +64,10 @@
     },
     "atnook-dotfiles": {
       "source": {
-        "source": "directory",
-        "path": "/home/atnook/.dotfiles/.claude/marketplace"
+        "source": "github",
+        "repo": "atriumnook/dotfiles",
+        "path": ".claude/marketplace/.claude-plugin/marketplace.json",
+        "sparsePaths": [".claude/marketplace"]
       }
     }
   },
