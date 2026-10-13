@@ -47,7 +47,8 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bun ~/.claude/bun-braille-dots-statusline.mjs"
+    "command": "bun ~/.claude/bun-braille-dots-statusline.mjs",
+    "refreshInterval": 60
   },
   "enabledPlugins": {
     "codex@openai-codex": true,

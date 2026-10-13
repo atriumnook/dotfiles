@@ -4,13 +4,16 @@ import { basename } from 'node:path';
 
 const BRAILLE = ' ⣀⣄⣤⣦⣶⣷⣿';
 const R = '\x1b[0m';
-const DIFF_MAX = 500;
 
 // Midnight Navy neutral ramp (single hue, tone only — HSL ≈ 220°, 18%)
-const T80 = '\x1b[38;2;162;170;188m'; // 数値 42% / ブランチ名
-const T65 = '\x1b[38;2;108;117;138m'; // ラベル ctx/5h/7d
-const T50 = '\x1b[38;2;68;78;99m';    // モデル名・cwd
-const T35 = '\x1b[38;2;36;44;61m';    // セパレータ │
+// ダーク背景 (#1e1e2e 想定) でのコントラスト比: VALUE 8.6 > IDENT 6.2 > LABEL 3.8 > SEP
+const VALUE = '\x1b[38;2;180;188;206m'; // 数値 42% / 47m
+const IDENT = '\x1b[38;2;150;159;180m'; // モデル名・cwd・規則外ブランチ
+const LABEL = '\x1b[38;2;112;121;143m'; // ラベル ctx/5h/7d・残り時間・cold
+const SEP   = '\x1b[38;2;62;70;90m';    // セパレータ │
+
+const ADD  = '\x1b[38;2;46;230;130m';
+const DEL  = '\x1b[38;2;255;92;92m';
 
 // Branch accents (git workflow semantics, high-chroma, dark-theme)
 const BR_MAIN    = '\x1b[38;2;226;230;240m'; // main/master
@@ -19,23 +22,23 @@ const BR_FEAT    = '\x1b[38;2;38;222;129m';  // feat/*
 const BR_FIX     = '\x1b[38;2;255;145;77m';  // fix/hotfix
 const BR_RELEASE = '\x1b[38;2;179;136;255m'; // release/*
 
-// effort.level: braille 充填量(色非依存の第2チャネル)＋段階色でレベルを符号化。
+// effort.level: 略号＋段階色でレベルを符号化。
 // ultracode はドキュメント上 xhigh として報告される場合があるため両方を定義し、
 // 未知値は EFFORT 外として生の文字列を中間色で表示する(将来値でも壊れない)。
 const EFFORT = {
-  low:       { abbr: 'lo',  cell: '⣀', tone: '\x1b[38;2;68;78;99m' },
-  medium:    { abbr: 'md',  cell: '⣤', tone: '\x1b[38;2;108;117;138m' },
-  high:      { abbr: 'hi',  cell: '⣶', tone: '\x1b[38;2;162;170;188m' },
-  xhigh:     { abbr: 'xh',  cell: '⣷', tone: '\x1b[38;2;200;206;220m' },
-  max:       { abbr: 'max', cell: '⣿', tone: '\x1b[38;2;179;136;255m' },
-  ultracode: { abbr: 'uc',  cell: '⣿', tone: '\x1b[38;2;255;128;191m' },
+  low:       { abbr: 'lo',  tone: LABEL },
+  medium:    { abbr: 'md',  tone: IDENT },
+  high:      { abbr: 'hi',  tone: VALUE },
+  xhigh:     { abbr: 'xh',  tone: '\x1b[38;2;200;206;220m' },
+  max:       { abbr: 'max', tone: '\x1b[38;2;179;136;255m' },
+  ultracode: { abbr: 'uc',  tone: '\x1b[38;2;255;128;191m' },
 };
 
 function effortSeg(level) {
   if (level == null) return '';
   const e = EFFORT[level];
-  if (!e) return `${T65}${level}${R}`; // 未知値フォールバック
-  return `${e.tone}${e.cell}${R} ${e.tone}${e.abbr}${R}`;
+  if (!e) return `${IDENT}${level}${R}`; // 未知値フォールバック
+  return `${e.tone}${e.abbr}${R}`;
 }
 
 // Gradient stops: traffic-light semantics
@@ -62,7 +65,7 @@ function gradient(pct) {
   return `\x1b[38;2;${r};${g};${b}m`;
 }
 
-function brailleBar(pct, width = 8) {
+function brailleBar(pct, width = 6) {
   pct = Math.min(Math.max(pct, 0), 100);
   const level = pct / 100;
   let bar = '';
@@ -96,9 +99,16 @@ function fmtRemaining(resetsAt) {
 
 function fmt(label, pct, resetsAt) {
   const p = Math.round(pct);
-  const base = `${T65}${label}${R} ${gradient(pct)}${brailleBar(pct)}${R} ${T80}${p}%${R}`;
+  const base = `${LABEL}${label}${R} ${gradient(pct)}${brailleBar(pct)}${R} ${VALUE}${p}%${R}`;
   const rem = fmtRemaining(resetsAt);
-  return rem ? `${base} ${T50}${rem}${R}` : base;
+  return rem ? `${base} ${LABEL}${rem}${R}` : base;
+}
+
+// prompt_cache: 失効までの残り時間。失効済みは cold
+function cacheSeg(pc) {
+  if (!pc?.caching_observed) return '';
+  const rem = pc.warm ? fmtRemaining(pc.expires_at) : '';
+  return rem ? `${LABEL}cache${R} ${VALUE}${rem}${R}` : `${LABEL}cache${R} ${LABEL}cold${R}`;
 }
 
 function branchColor(name) {
@@ -107,7 +117,7 @@ function branchColor(name) {
   if (/^(feat|feature)\//.test(name))       return BR_FEAT;
   if (/^(fix|hotfix|bugfix)\//.test(name))  return BR_FIX;
   if (/^release\//.test(name))              return BR_RELEASE;
-  return T65;
+  return IDENT;
 }
 
 // execSync 廃止。シェルを挟まないので Windows でも問題なく動く
@@ -138,7 +148,10 @@ function parseDiffStat(raw) {
 const data = await Bun.stdin.json();
 const model = data?.model?.display_name ?? 'Claude';
 const effort = effortSeg(data?.effort?.level);
-const parts = [effort ? `${T50}${model}${R} ${effort}` : `${T50}${model}${R}`];
+const parts = [effort ? `${IDENT}${model}${R} ${effort}` : `${IDENT}${model}${R}`];
+
+const cache = cacheSeg(data?.prompt_cache);
+if (cache) parts.push(cache);
 
 const ctx = data?.context_window?.used_percentage;
 if (ctx != null) parts.push(fmt('ctx', ctx));
@@ -149,34 +162,28 @@ if (five != null) parts.push(fmt('5h', five, data?.rate_limits?.five_hour?.reset
 const week = data?.rate_limits?.seven_day?.used_percentage;
 if (week != null) parts.push(fmt('7d', week, data?.rate_limits?.seven_day?.resets_at));
 
-const line1 = parts.join(` ${T35}│${R} `);
+const line1 = parts.join(` ${SEP}│${R} `);
 
-const cwd = data?.cwd ?? '';
+const cwd = data?.workspace?.current_dir ?? data?.cwd ?? '';
 const dir = cwd ? basename(cwd) : '';
+const worktree = data?.workspace?.git_worktree; // linked worktree 内でのみ存在
 const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
 
 const segments = [];
-if (dir) segments.push(`${T50}${dir}${R}`);
+// worktree 名がディレクトリ名と同じなら dir に wt ラベルを付けるだけにする
+if (dir) segments.push(worktree === dir ? `${LABEL}wt${R} ${IDENT}${dir}${R}` : `${IDENT}${dir}${R}`);
+if (worktree && worktree !== dir) segments.push(`${LABEL}wt${R} ${VALUE}${worktree}${R}`);
 if (branch) {
-  const color = branchColor(branch);
   const display = branch.length > 30 ? branch.slice(0, 29) + '…' : branch;
-  segments.push(`${color}⣿${R} ${T80}${display}${R}`);
+  segments.push(`${branchColor(branch)}${display}${R}`);
 }
 
-const unstaged = parseDiffStat(git(['diff', '--shortstat'], cwd));
-const staged   = parseDiffStat(git(['diff', '--cached', '--shortstat'], cwd));
-const add = unstaged.add + staged.add;
-const del = unstaged.del + staged.del;
+// HEAD 基準の正味差分(staged + unstaged を1回で取得し、二重計上を避ける)
+const { add, del } = parseDiffStat(git(['diff', 'HEAD', '--shortstat'], cwd));
+const diff = [];
+if (add > 0) diff.push(`${ADD}+${add}${R}`);
+if (del > 0) diff.push(`${DEL}-${del}${R}`);
+if (diff.length) segments.push(diff.join(' '));
 
-if (add > 0 || del > 0) {
-  const addPct = Math.min(add / DIFF_MAX * 100, 100);
-  const delPct = Math.min(del / DIFF_MAX * 100, 100);
-  let diff = '';
-  if (add > 0) diff += `\x1b[38;2;46;230;130m${brailleBar(addPct)}${R}`;
-  if (add > 0 && del > 0) diff += ' ';
-  if (del > 0) diff += `\x1b[38;2;255;82;82m${brailleBar(delPct)}${R}`;
-  segments.push(diff);
-}
-
-const line2 = segments.join(` ${T35}│${R} `);
-Bun.write(Bun.stdout, line2 ? `${line1}\n${line2}` : line1);
+const line2 = segments.join(` ${SEP}│${R} `);
+await Bun.write(Bun.stdout, line2 ? `${line1}\n${line2}` : line1);
