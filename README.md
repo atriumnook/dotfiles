@@ -35,7 +35,7 @@ $EDITOR ~/.config/mise/miserc.toml   # 例: env = ["personal", "linux", "omarchy
 ## 新しいマシンのセットアップ
 
 ```sh
-git clone <repo> ~/.dotfiles && cd ~/.dotfiles && git switch mise
+git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles && cd ~/.dotfiles
 mkdir -p ~/.config/mise/conf.d
 ln -s ~/.dotfiles/.config/mise/conf.d/10-dotfiles.toml ~/.config/mise/conf.d/
 cp .config/mise/miserc.toml.example ~/.config/mise/miserc.toml   # 編集する
