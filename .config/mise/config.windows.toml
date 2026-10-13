@@ -1,4 +1,4 @@
-# OS=windows 専用の dotfiles(miserc.toml の env に "windows" を含めたマシンで有効)。
+# OS=windows 専用の dotfiles(miserc.local.toml の env に "windows" を含めたマシンで有効)。
 #
 # PowerShell profile は「conf.d/*.ps1 を順に dot-source するローダー」だけを block で注入し、
 # 中身は Documents/PowerShell/conf.d/ の個別ファイルで管理する(旧 chezmoi run_once の移植)。

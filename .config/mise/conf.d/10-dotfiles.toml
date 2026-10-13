@@ -3,7 +3,7 @@
 # ~/.config/mise/config.toml は omarchy の mise ラッパー(`mise use -g`)や手動の
 # `mise use -g` が書き込む machine-local ファイルなので、ここでは管理しない。
 #
-# 有効化する environment は各マシンの ~/.config/mise/miserc.toml で宣言する:
+# 有効化する environment は各マシンの ~/.config/mise/miserc.local.toml で宣言する:
 #   profile : personal / work
 #   OS      : linux / windows
 #   class   : omarchy / wsldebian

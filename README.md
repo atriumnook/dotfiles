@@ -17,7 +17,11 @@ chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下
 
 ## environment
 
-`~/.config/mise/miserc.toml` で有効化する environment を宣言する(マシン固有のため repo には置かない)。
+`~/.config/mise/miserc.local.toml` で有効化する environment を宣言する(マシン固有のため repo には置かない)。
+mise は `miserc.local.toml` を `miserc.toml` より優先して読み、マシン固有の選択には `.local` を使うのが公式の推奨
+([miserc locations](https://mise.jdx.dev/configuration.html#miserc-locations))。
+環境変数 `MISE_ENV` や `-E` はすべての miserc より優先されるため、miserc を変更したら
+`MISE_ENV` を引き継いだ端末・マルチプレクサのセッションを開き直す。
 
 | 軸 | 値 | 効果 |
 |---|---|---|
@@ -26,8 +30,8 @@ chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下
 | class | `omarchy` / `wsldebian` | Linux のマシンクラス別ツール・nvim 設定 |
 
 ```sh
-cp ~/.dotfiles/.config/mise/miserc.toml.example ~/.config/mise/miserc.toml
-$EDITOR ~/.config/mise/miserc.toml   # 例: env = ["personal", "linux", "omarchy"]
+cp ~/.dotfiles/.config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml
+$EDITOR ~/.config/mise/miserc.local.toml   # 例: env = ["personal", "linux", "omarchy"]
 ```
 
 未宣言のマシンでは共通設定のみが読まれ、profile / OS 別のツールと dotfiles は入らない。
@@ -38,7 +42,7 @@ $EDITOR ~/.config/mise/miserc.toml   # 例: env = ["personal", "linux", "omarchy
 git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles && cd ~/.dotfiles
 mkdir -p ~/.config/mise/conf.d
 ln -s ~/.dotfiles/.config/mise/conf.d/10-dotfiles.toml ~/.config/mise/conf.d/
-cp .config/mise/miserc.toml.example ~/.config/mise/miserc.toml   # 編集する
+cp .config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml   # 編集する
 mise trust ~/.config/mise
 mise bootstrap dotfiles apply   # 1 回目: 共通分と config.<env>.toml を配置
 mise bootstrap dotfiles apply   # 2 回目: 配置された env ファイルの dotfiles を適用
