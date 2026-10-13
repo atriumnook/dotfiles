@@ -27,7 +27,6 @@ uv = "0"
 age = "1"
 ast-grep = "0"
 atuin = "18"
-chezmoi = "2"          # 移行期間の安全網。Windows 移行完了後に削除
 delta = "0"
 fd = "10"
 fzf = "0"
