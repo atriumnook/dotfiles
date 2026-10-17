@@ -1,0 +1,13 @@
+# module=cli(omarchy 以外の全マシンが選ぶ)。omarchy が pacman / omarchy-mise-install で提供する
+# ツールを mise で補う。omarchy 機では選ばず、omarchy の管理に任せる。
+[tools]
+node = "26"
+fd = "10"
+fzf = "0"
+jq = "1"
+ripgrep = "15"
+starship = "1"
+usage = "3"
+claude = "latest"
+"npm:hunkdiff" = "0"
+"github:ogulcancelik/herdr" = { version = "0", os = "linux" }

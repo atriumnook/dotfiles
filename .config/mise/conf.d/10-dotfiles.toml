@@ -7,6 +7,7 @@
 #   profile : personal / work
 #   OS      : linux / windows
 #   class   : omarchy / wsldebian
+#   module  : cli / personal-cli(omarchy 以外の機で、omarchy が提供するツールを mise で補う)
 # dotfiles.root は mise 既定の ~/.dotfiles を使用(設定不要)。
 
 [settings]
@@ -19,8 +20,10 @@ minimum_release_age_excludes = ["claude", "codex", "antigravity-cli"]
 exclude = ["~/.config/hypr/**", "~/.local/share/omarchy/**"]
 
 [tools]
+# omarchy が pacman / omarchy-mise-install で提供するツール(node, fd, claude など)は
+# ここに書かず config.cli.toml / config.personal-cli.toml に置く。ここに書くと omarchy 機で
+# omarchy の管理を上書きする。
 # --- Runtimes ---
-node = "26"
 bun = "1"
 uv = "0"
 # --- CLI(全 OS 共通)---
@@ -28,22 +31,13 @@ age = "1"
 ast-grep = "0"
 atuin = "18"
 delta = "0"
-fd = "10"
-fzf = "0"
-jq = "1"
-ripgrep = "15"
-starship = "1"
-usage = "3"
 yazi = "26"
 # --- AI ---
-claude = "latest"
 apm = "0"
-"npm:hunkdiff" = "0"
 "github:tomasz-tomczyk/crit" = "0"
 "github:yusukebe/ax" = "0"
 # --- Linux 限定(旧 $isLinux)---
 sheldon = { version = "0", os = "linux" }
-"github:ogulcancelik/herdr" = { version = "0", os = "linux" }
 
 # ── dotfiles(全 OS 共通分。OS 固有分は config.linux.toml / config.windows.toml)──
 # source を省略すると dotfiles.root(~/.dotfiles)配下の同パスが参照される。
@@ -78,3 +72,5 @@ sheldon = { version = "0", os = "linux" }
 "~/.config/mise/config.wsldebian.toml" = { mode = "symlink" }
 "~/.config/mise/config.linux.toml" = { mode = "symlink" }
 "~/.config/mise/config.windows.toml" = { mode = "symlink" }
+"~/.config/mise/config.cli.toml" = { mode = "symlink" }
+"~/.config/mise/config.personal-cli.toml" = { mode = "symlink" }

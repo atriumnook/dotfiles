@@ -28,6 +28,14 @@ mise は `miserc.local.toml` を `miserc.toml` より優先して読み、マシ
 | profile | `personal` / `work` | 個人用ツールの有無(`config.personal.toml`) |
 | OS | `linux` / `windows` | OS 別の dotfiles(`config.linux.toml` / `config.windows.toml`) |
 | class | `omarchy` / `wsldebian` | Linux のマシンクラス別ツール・nvim 設定 |
+| module | `cli` / `personal-cli` | omarchy 以外の機で、omarchy が提供するツールを補う(`cli` は omarchy 以外の全マシン、`personal-cli` はそのうち personal のみ) |
+
+| マシン | env |
+|---|---|
+| 個人 omarchy | `["personal", "linux", "omarchy"]` |
+| 個人 WSL / Debian | `["personal", "linux", "wsldebian", "cli", "personal-cli"]` |
+| 仕事 WSL / Debian | `["work", "linux", "wsldebian", "cli"]` |
+| 個人 Windows | `["personal", "windows", "cli", "personal-cli"]` |
 
 ```sh
 cp ~/.dotfiles/.config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml
@@ -76,7 +84,7 @@ $c = $c -replace '(?ms)^# USER-CONFIG:START.*?^# USER-CONFIG:END\s*', ''
 Set-Content -LiteralPath $p -Value $c -Encoding utf8
 ```
 
-続けて「新しいマシンのセットアップ」を実施する。miserc は `env = ["personal", "windows"]`。
+続けて「新しいマシンのセットアップ」を実施する。miserc は `env = ["personal", "windows", "cli", "personal-cli"]`。
 
 - symlink は Developer Mode が有効なら作成される。権限が無い場合、mise はファイルをコピーする
   (コピーの場合は repo 側を編集して `apply` する)。
@@ -102,4 +110,7 @@ mise 設定の復元用に、conf.d 分割前の `~/.config/mise` は `~/.config
 - omarchy が管理するパス(`~/.config/hypr` など)は `[dotfiles]` に登録せず、`[history] exclude` で除外する。
 - omarchy が `mise use -g` で追加するツールは machine-local の `~/.config/mise/config.toml` に入り、
   この repo を書き換えない。
+- omarchy が pacman / `omarchy-mise-install` で提供するツール(node, fd, claude, codex など)は共通設定に
+  書かず、module(`config.cli.toml` / `config.personal-cli.toml`)に置く。共通設定や profile に書くと
+  omarchy 機で mise 側が PATH の先に立ち、omarchy の管理を上書きする。
 - `apply` は symlink 化できない既存の実ファイルを既定で上書きしない(`--force` が必要)。

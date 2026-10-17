@@ -1,11 +1,6 @@
-# profile=personal 専用ツール(旧 $isPersonal ブロック。CLIProxyAPI は proxy 廃止で削除)
+# profile=personal 専用ツール(旧 $isPersonal ブロック。CLIProxyAPI は proxy 廃止で削除)。
+# omarchy が提供する個人向けツール(codex, pi など)は config.personal-cli.toml に置く。
 [tools]
-github-cli = "2"
 buf = "1"
 bitwarden = "2026.6.0"
-codex = "latest"
 antigravity-cli = "latest"
-# 旧テンプレートに無く live に存在したもの(要確認: personal 想定で配置)
-pi = "latest"
-cursor-cli = "latest"
-"npm:playwright" = "latest"

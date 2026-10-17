@@ -4,10 +4,12 @@
 #   profile : personal / work
 #   OS      : linux / windows          ← OS 別 dotfiles(config.<os>.toml)を有効化
 #   class   : omarchy / wsldebian      ← Linux のマシンクラス(任意)
+#   module  : cli / personal-cli       ← omarchy 以外の機で、omarchy が提供するツールを補う
+#             cli は omarchy 以外の全マシン、personal-cli はそのうち profile=personal のマシンが選ぶ
 #
 # 例:
 #   個人 omarchy 機      -> env = ["personal", "linux", "omarchy"]
-#   個人 WSL/Debian 機    -> env = ["personal", "linux", "wsldebian"]
-#   仕事 WSL/Debian 機    -> env = ["work", "linux", "wsldebian"]
-#   個人 Windows 機       -> env = ["personal", "windows"]
+#   個人 WSL/Debian 機    -> env = ["personal", "linux", "wsldebian", "cli", "personal-cli"]
+#   仕事 WSL/Debian 機    -> env = ["work", "linux", "wsldebian", "cli"]
+#   個人 Windows 機       -> env = ["personal", "windows", "cli", "personal-cli"]
 env = ["personal", "linux", "omarchy"]

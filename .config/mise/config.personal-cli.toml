@@ -1,0 +1,8 @@
+# module=personal-cli(profile=personal かつ omarchy 以外のマシンが選ぶ)。omarchy が
+# omarchy-mise-install で提供する個人向けツールを mise で補う。omarchy 機では選ばない。
+[tools]
+github-cli = "2"
+codex = "latest"
+pi = "latest"
+cursor-cli = "latest"
+"npm:playwright" = "latest"
