@@ -25,6 +25,23 @@ mise bootstrap status      # 結果の確認
 
 dotfiles だけを適用し直すときは `mise dot apply`(`mise dotfiles apply` の別名)を使う。
 
+### Cursor CLI(個人用の omarchy 以外のマシン)
+
+Cursor CLI は mise ではなく公式インストーラーで入れる。mise のレジストリ定義は同梱の `node` と `rg` を
+含むディレクトリごと PATH に追加し、mise で入れた node と ripgrep より先に解決されるため。
+公式インストーラーは `~/.local/bin` に `cursor-agent` と `agent` だけを置き、自動で更新する。
+
+```sh
+curl https://cursor.com/install -fsS | bash          # Linux / WSL
+```
+
+```powershell
+irm 'https://cursor.com/install?win32=true' | iex    # Windows
+```
+
+以前 mise で入れていたマシンでは、`mise uninstall --all cursor-cli` で mise 側を削除する。
+omarchy 機では omarchy が Cursor CLI を入れる(公式インストーラーで入っていれば、それを使う)。
+
 ## 既存マシンの更新
 
 ```sh

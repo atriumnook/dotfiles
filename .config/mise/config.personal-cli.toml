@@ -4,6 +4,5 @@
 github-cli = "2"
 codex = "latest"
 pi = "latest"
-cursor-cli = "latest"
 "npm:playwright" = "latest"
 opencode = "latest"
