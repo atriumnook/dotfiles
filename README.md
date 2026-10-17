@@ -43,13 +43,20 @@ git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles && cd ~/.dotfil
 mkdir -p ~/.config/mise/conf.d
 ln -s ~/.dotfiles/.config/mise/conf.d/10-dotfiles.toml ~/.config/mise/conf.d/
 cp .config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml   # 編集する
-mise trust ~/.config/mise
-mise bootstrap dotfiles apply   # 1 回目: 共通分と config.<env>.toml を配置
-mise bootstrap dotfiles apply   # 2 回目: 配置された env ファイルの dotfiles を適用
-mise install
+mise bootstrap --dry-run   # 実行内容の確認
+mise bootstrap             # dotfiles の配置 → settings.json などの合成 → ツールのインストール
+mise bootstrap status      # 結果の確認
 ```
 
-env ファイル自体が dotfiles として配置されるため、`apply` は 2 回必要。
+`mise bootstrap` は dotfiles の適用とツールのインストール(`mise install` 相当)を1回で行う。
+`config.<env>.toml` 自体も dotfiles として配置されるが、mise は配置した設定を読み直してから
+残りを適用するので、1回で environment 別の dotfiles まで入る。グローバル設定(`~/.config/mise`)に
+`mise trust` は要らない。
+
+選んでいない environment の `config.<env>.toml`(例: Linux での `config.windows.toml`)について
+`not trusted` の警告が出るが、適用には影響しない。
+
+dotfiles だけを適用し直すときは `mise dot apply`(`mise dotfiles apply` の別名)を使う。
 
 ## settings.json の扱い
 
@@ -84,7 +91,7 @@ Set-Content -LiteralPath $p -Value $c -Encoding utf8
 必ず現在の実ファイルを退避する。
 
 ```sh
-mise bootstrap dotfiles unapply   # symlink / block を外す
+mise dot unapply   # symlink / block を外す
 chezmoi apply                     # 凍結時点の実ファイルへ戻る(要・事前退避)
 ```
 
