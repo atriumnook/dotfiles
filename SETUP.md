@@ -1,0 +1,70 @@
+# セットアップと運用の手順
+
+設定の仕組みと environment の選び方は [README.md](README.md) を参照する。
+
+## 新しいマシンのセットアップ
+
+```sh
+git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles && cd ~/.dotfiles
+mkdir -p ~/.config/mise/conf.d
+ln -s ~/.dotfiles/.config/mise/conf.d/10-dotfiles.toml ~/.config/mise/conf.d/
+cp .config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml
+$EDITOR ~/.config/mise/miserc.local.toml   # env を README の「environment」の表に合わせる
+mise bootstrap --dry-run   # 実行内容の確認
+mise bootstrap             # dotfiles を配置し、settings.json などを合成してから、ツールをインストールする
+mise bootstrap status      # 結果の確認
+```
+
+`mise bootstrap` は dotfiles の適用とツールのインストール(`mise install` 相当)を1回で行う。
+`config.<env>.toml` 自体も dotfiles として配置されるが、mise は配置した設定を読み直してから
+残りを適用するので、1回で environment 別の dotfiles まで入る。グローバル設定(`~/.config/mise`)に
+`mise trust` は要らない。
+
+選んでいない environment の `config.<env>.toml`(例: Linux での `config.windows.toml`)について
+`not trusted` の警告が出るが、適用には影響しない。
+
+dotfiles だけを適用し直すときは `mise dot apply`(`mise dotfiles apply` の別名)を使う。
+
+## 既存マシンの更新
+
+```sh
+cd ~/.dotfiles && git pull
+mise bootstrap --dry-run
+mise bootstrap
+```
+
+environment が増えたとき(例: module の `cli` / `personal-cli`)は、`git pull` の前に
+`miserc.local.toml` の `env` を README の表に合わせて更新する。`env` に入れていない environment のツールは、
+`mise bootstrap` を実行しても入らない。新しい `config.<env>.toml` は `mise bootstrap` が配置するまで
+読まれないため、`env` を更新してから `mise bootstrap` を実行するまでの間は、その environment のツールを使えない。
+
+## Windows への適用
+
+```powershell
+# 1. 旧 chezmoi が profile に注入したローダーを削除する(残すとローダーが二重になる)
+$p = "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
+$c = Get-Content -Raw -LiteralPath $p
+$c = $c -replace '(?ms)^# USER-CONFIG:START.*?^# USER-CONFIG:END\s*', ''
+Set-Content -LiteralPath $p -Value $c -Encoding utf8
+```
+
+続けて「新しいマシンのセットアップ」を実施する。miserc は `env = ["personal", "windows", "cli", "personal-cli"]`。
+
+- symlink は Developer Mode が有効なら作成される。権限が無い場合、mise はファイルをコピーする
+  (コピーの場合は repo 側を編集して `apply` する)。
+- profile への追記は `# >>> mise:loader >>>` ブロックとして行われ、ブロック外の記述は保持される。
+  適用時に行末が CRLF から LF に変わる場合があるが、PowerShell の動作には影響しない。
+- Windows では chezmoi を移行完了まで残す想定。mise と chezmoi の両方から同じファイルに書かないこと。
+
+## 切り戻し
+
+移行元の chezmoi は `~/.local/share/chezmoi`(タグ `pre-mise-cutover`)に凍結してある。
+**凍結時点の内容は古い**(`settings.json` などその後の編集を含まない)ため、`chezmoi apply` の前に
+必ず現在の実ファイルを退避する。
+
+```sh
+mise dot unapply   # symlink / block を外す
+chezmoi apply      # 凍結時点の実ファイルへ戻る(事前に現在の実ファイルを退避しておく)
+```
+
+mise 設定の復元用に、conf.d 分割前の `~/.config/mise` は `~/.config/mise.pre-confd-*` に退避される。

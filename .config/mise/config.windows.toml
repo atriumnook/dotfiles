@@ -5,7 +5,7 @@
 # profile 内のユーザー記述は block の外なので保持される。
 #
 # 移行時の注意: 旧 chezmoi が注入した `# USER-CONFIG:START ... # USER-CONFIG:END`
-# ブロックが profile に残っていると、ローダーが二重になる。初回の apply 前に README の
+# ブロックが profile に残っていると、ローダーが二重になる。初回の apply 前に SETUP.md の
 # 手順で旧ブロックを削除すること。
 [dotfiles]
 "~/Documents/PowerShell/conf.d/10-mise.ps1" = { mode = "copy" }

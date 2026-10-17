@@ -1,7 +1,9 @@
 # dotfiles (mise bootstrap 管理)
 
-chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下は `$HOME` のミラー構成で、
-`[dotfiles]` が各ファイルを配置する(既定は symlink)。`dotfiles.root` は mise 既定の `~/.dotfiles`。
+chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下のファイルは `$HOME` と同じ相対パスに置き、
+`[dotfiles]` がそれぞれを `$HOME` に配置する(既定は symlink)。`dotfiles.root` は mise 既定の `~/.dotfiles`。
+
+セットアップ・更新・切り戻しの手順は [SETUP.md](SETUP.md) を参照する。
 
 ## 構成
 
@@ -28,7 +30,9 @@ mise は `miserc.local.toml` を `miserc.toml` より優先して読み、マシ
 | profile | `personal` / `work` | 個人用ツールの有無(`config.personal.toml`) |
 | OS | `linux` / `windows` | OS 別の dotfiles(`config.linux.toml` / `config.windows.toml`) |
 | class | `omarchy` / `wsldebian` | Linux のマシンクラス別ツール・nvim 設定 |
-| module | `cli` / `personal-cli` | omarchy 以外の機で、omarchy が提供するツールを補う(`cli` は omarchy 以外の全マシン、`personal-cli` はそのうち personal のみ) |
+| module | `cli` / `personal-cli` | omarchy 以外のマシンで、omarchy が提供するツールを補う。`cli` は omarchy 以外の全マシン、`personal-cli` はそのうち profile が `personal` のマシンが選ぶ |
+
+マシンごとの `env` は次のとおり。
 
 | マシン | env |
 |---|---|
@@ -37,34 +41,7 @@ mise は `miserc.local.toml` を `miserc.toml` より優先して読み、マシ
 | 仕事 WSL / Debian | `["work", "linux", "wsldebian", "cli"]` |
 | 個人 Windows | `["personal", "windows", "cli", "personal-cli"]` |
 
-```sh
-cp ~/.dotfiles/.config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml
-$EDITOR ~/.config/mise/miserc.local.toml   # 例: env = ["personal", "linux", "omarchy"]
-```
-
-未宣言のマシンでは共通設定のみが読まれ、profile / OS 別のツールと dotfiles は入らない。
-
-## 新しいマシンのセットアップ
-
-```sh
-git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles && cd ~/.dotfiles
-mkdir -p ~/.config/mise/conf.d
-ln -s ~/.dotfiles/.config/mise/conf.d/10-dotfiles.toml ~/.config/mise/conf.d/
-cp .config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml   # 編集する
-mise bootstrap --dry-run   # 実行内容の確認
-mise bootstrap             # dotfiles の配置 → settings.json などの合成 → ツールのインストール
-mise bootstrap status      # 結果の確認
-```
-
-`mise bootstrap` は dotfiles の適用とツールのインストール(`mise install` 相当)を1回で行う。
-`config.<env>.toml` 自体も dotfiles として配置されるが、mise は配置した設定を読み直してから
-残りを適用するので、1回で environment 別の dotfiles まで入る。グローバル設定(`~/.config/mise`)に
-`mise trust` は要らない。
-
-選んでいない environment の `config.<env>.toml`(例: Linux での `config.windows.toml`)について
-`not trusted` の警告が出るが、適用には影響しない。
-
-dotfiles だけを適用し直すときは `mise dot apply`(`mise dotfiles apply` の別名)を使う。
+`env` を宣言していないマシンでは共通設定だけが読まれ、environment 別のツールと dotfiles は入らない。
 
 ## settings.json の扱い
 
@@ -74,43 +51,13 @@ symlink にしない。`merge = true` で、repo の `.claude/settings.json` に
 
 設定を repo に反映するときは、実ファイルの内容を `.claude/settings.json` へ手で取り込んで commit する。
 
-## Windows への適用
-
-```powershell
-# 1. 旧 chezmoi が profile に注入したローダーを削除する(残すとローダーが二重になる)
-$p = "$HOME\Documents\PowerShell\Microsoft.PowerShell_profile.ps1"
-$c = Get-Content -Raw -LiteralPath $p
-$c = $c -replace '(?ms)^# USER-CONFIG:START.*?^# USER-CONFIG:END\s*', ''
-Set-Content -LiteralPath $p -Value $c -Encoding utf8
-```
-
-続けて「新しいマシンのセットアップ」を実施する。miserc は `env = ["personal", "windows", "cli", "personal-cli"]`。
-
-- symlink は Developer Mode が有効なら作成される。権限が無い場合、mise はファイルをコピーする
-  (コピーの場合は repo 側を編集して `apply` する)。
-- profile への追記は `# >>> mise:loader >>>` ブロックとして行われ、ブロック外の記述は保持される。
-  適用時に行末が CRLF から LF に変わる場合があるが、PowerShell の動作には影響しない。
-- Windows では chezmoi を移行完了まで残す想定。mise と同じファイルに両方から書かないこと。
-
-## 切り戻し
-
-移行元の chezmoi は `~/.local/share/chezmoi`(タグ `pre-mise-cutover`)に凍結してある。
-**凍結時点の内容は古い**(`settings.json` などその後の編集を含まない)ため、`chezmoi apply` の前に
-必ず現在の実ファイルを退避する。
-
-```sh
-mise dot unapply   # symlink / block を外す
-chezmoi apply                     # 凍結時点の実ファイルへ戻る(要・事前退避)
-```
-
-mise 設定の復元用に、conf.d 分割前の `~/.config/mise` は `~/.config/mise.pre-confd-*` に退避される。
-
 ## omarchy との関係
 
 - omarchy が管理するパス(`~/.config/hypr` など)は `[dotfiles]` に登録せず、`[history] exclude` で除外する。
 - omarchy が `mise use -g` で追加するツールは machine-local の `~/.config/mise/config.toml` に入り、
   この repo を書き換えない。
 - omarchy が pacman / `omarchy-mise-install` で提供するツール(node, fd, claude, codex など)は共通設定に
-  書かず、module(`config.cli.toml` / `config.personal-cli.toml`)に置く。共通設定や profile に書くと
-  omarchy 機で mise 側が PATH の先に立ち、omarchy の管理を上書きする。
+  書かず、module(`config.cli.toml` / `config.personal-cli.toml`)に置く。共通設定や profile に書くと、
+  omarchy 機では mise が入れたものが omarchy のラッパーや `/usr/bin` より PATH の前に来て、
+  omarchy の管理を上書きする。
 - `apply` は symlink 化できない既存の実ファイルを既定で上書きしない(`--force` が必要)。
