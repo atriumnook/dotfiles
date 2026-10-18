@@ -60,7 +60,12 @@ sheldon = { version = "0", os = "linux" }
 "~/.claude/skills/unslop-ja/SKILL.md" = { mode = "symlink" }
 "~/.claude/skills/unslop-ja/slides.md" = { mode = "symlink" }
 "~/.config/starship.toml" = { mode = "symlink" }
-"~/.gitconfig" = { mode = "symlink" }
+
+# ~/.gitconfig は symlink にしない。`git config --global`(gh auth setup-git や omarchy の
+# user 設定を含む)の書き込み先なので、symlink だとその内容が repo に入る。共通設定を
+# include する1行だけを先頭に入れ、credential など後に書いたマシンごとの値を優先させる。
+"~/.config/git/dotfiles.gitconfig" = { mode = "symlink" }
+"~/.gitconfig/dotfiles" = { line = "[include] path = ~/.config/git/dotfiles.gitconfig", position = "prepend" }
 
 # settings.json は Claude Code 自身が書き換える(model / enabledPlugins 等)ため
 # symlink にせず、repo 側のキーだけを実ファイルへ merge する。

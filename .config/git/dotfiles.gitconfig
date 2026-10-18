@@ -1,10 +1,7 @@
-[user]
-    # ~/.gitconfig.local で設定する（リポジトリには含めない）
-    # name = "name"
-    # email = "email@example.com"
-
-[include]
-    path = ~/.gitconfig.local
+# 全マシン共通の git 設定。~/.gitconfig の先頭の `[include]` から読み込まれる
+# (~/.gitconfig 自体は repo で管理しないマシンごとのファイル)。
+# credential・user など、マシンごとに異なる設定は ~/.gitconfig に書く。
+# `git config --global` も ~/.gitconfig に書き込むので、この repo は書き換わらない。
 
 [core]
     autocrlf = input
@@ -35,9 +32,3 @@
 
 [alias]
     nb = "!f(){ \\\n  echo \"from: $(git branch --show-current)\"; \\\n  t=$(printf \"feature\\nbugfix\\nhotfix\\nrelease\\nchore\\n\" | fzf --no-sort --prompt=\"type > \"); \\\n  [ -z \"$t\" ] && echo \"cancelled\" && exit 1; \\\n  printf \"name: \"; read -r n; \\\n  [ -z \"$n\" ] && echo \"name is required\" && exit 1; \\\n  case \"$n\" in \\\n    *\" \"*|*/|*\"..\"*) echo \"invalid name\"; exit 1 ;; \\\n  esac; \\\n  git switch -c \"$t/$n\"; \\\n}; f"
-[credential "https://github.com"]
-	helper = 
-	helper = !/usr/bin/gh auth git-credential
-[credential "https://gist.github.com"]
-	helper = 
-	helper = !/usr/bin/gh auth git-credential

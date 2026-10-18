@@ -55,6 +55,22 @@ environment が増えたとき(例: module の `cli` / `personal-cli`)は、`git
 `mise bootstrap` を実行しても入らない。新しい `config.<env>.toml` は `mise bootstrap` が配置するまで
 読まれないため、`env` を更新してから `mise bootstrap` を実行するまでの間は、その environment のツールを使えない。
 
+### `~/.gitconfig` を machine-local に移す(1回だけ)
+
+`~/.gitconfig` が repo の `.gitconfig` への symlink になっているマシンでは、`git pull` の前に
+symlink を実ファイルに置き換える。symlink のままだと、`git pull` 後に参照先が無くなり、
+`mise bootstrap` も symlink への書き込みをエラーにする。
+
+```sh
+cp --remove-destination "$(readlink -f ~/.gitconfig)" ~/.gitconfig   # symlink を実ファイルに置き換える
+cat ~/.gitconfig.local >> ~/.gitconfig 2>/dev/null && rm ~/.gitconfig.local   # 旧 .gitconfig.local を統合する
+$EDITOR ~/.gitconfig   # このマシンの credential・user だけを残し、共通設定の節は削る
+cd ~/.dotfiles && git pull && mise bootstrap   # 先頭に共通設定の [include] が入る
+git config --show-origin --list | grep dotfiles.gitconfig   # 共通設定が読まれていることを確認する
+```
+
+Windows では `~/.gitconfig` を手で実ファイルにしてから同じ流れで行う。
+
 ## Windows への適用
 
 ```powershell

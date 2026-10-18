@@ -17,6 +17,11 @@ chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下
 `~/.config/mise/config.toml` は **管理しない**。omarchy の mise ラッパーや手動の `mise use -g` が
 追記する machine-local ファイルで、conf.d と併読される。
 
+`~/.gitconfig` も **管理しない**。`git config --global`(`gh auth setup-git` や omarchy の user 設定を含む)が
+書き込む machine-local ファイルで、credential や user などマシンごとの値を書く。repo の共通設定
+(`.config/git/dotfiles.gitconfig`)は、`[dotfiles]` が先頭に入れる `[include]` の1行で読み込まれる。
+git は後に書いた値を優先するので、`~/.gitconfig` に書いた値が共通設定より優先される。
+
 ## environment
 
 `~/.config/mise/miserc.local.toml` で有効化する environment を宣言する(マシン固有のため repo には置かない)。
