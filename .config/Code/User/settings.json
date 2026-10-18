@@ -46,5 +46,7 @@
 "terminal.integrated.defaultProfile.linux": "zsh",
 "editor.fontFamily": "'Droid Sans Mono', PlemolJP, 'PlemolJP Console NF', monospace",
 "claudeCode.selectedModel": "default",
-"claudeCode.allowDangerouslySkipPermissions": true
+"claudeCode.allowDangerouslySkipPermissions": true,
+"editor.wordWrap": "wordWrapColumn",
+"editor.renderWhitespace": "all"
 }
