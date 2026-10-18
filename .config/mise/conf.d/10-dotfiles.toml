@@ -56,6 +56,9 @@ sheldon = { version = "0", os = "linux" }
 "~/.claude/hooks/notify-icon.png" = { mode = "symlink" }
 "~/.claude/output-styles/ELI5.md" = { mode = "symlink" }
 "~/.claude/skills/html-artifact/SKILL.md" = { mode = "symlink" }
+"~/.claude/skills/reframe/SKILL.md" = { mode = "symlink" }
+"~/.claude/skills/unslop-ja/SKILL.md" = { mode = "symlink" }
+"~/.claude/skills/unslop-ja/slides.md" = { mode = "symlink" }
 "~/.config/starship.toml" = { mode = "symlink" }
 "~/.gitconfig" = { mode = "symlink" }
 
