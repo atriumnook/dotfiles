@@ -7,6 +7,11 @@
       "name": "prompt-rail",
       "source": "./plugins/prompt-rail",
       "description": "A rail of this session's prompts above the prompt input, in the style of beUI's Preview Rail: hover a tick to preview a prompt, click it to jump there."
+    },
+    {
+      "name": "sitrep",
+      "source": "./plugins/sitrep",
+      "description": "A situation report above the prompt input, colored like an andon: where the work stands, what is unconfirmed, the decision that waits on you and the next step, each a key away from the prompt box."
     }
   ]
 }

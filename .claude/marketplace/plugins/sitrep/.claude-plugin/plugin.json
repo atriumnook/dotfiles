@@ -1,0 +1,9 @@
+{
+  "name": "sitrep",
+  "version": "0.1.0",
+  "description": "A situation report above the prompt input, colored like an andon: where the work stands, what is unconfirmed, the decision that waits on you and the next step, each a key away from the prompt box.",
+  "author": { "name": "atnook" },
+  "license": "MIT",
+  "keywords": ["status", "summary", "next-steps", "function-hooks"],
+  "types": "./types/sitrep.d.ts"
+}

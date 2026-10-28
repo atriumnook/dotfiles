@@ -53,7 +53,8 @@
   "enabledPlugins": {
     "codex@openai-codex": true,
     "mattpocock-skills@claude-plugins-official": true,
-    "prompt-rail@atnook-dotfiles": true
+    "prompt-rail@atnook-dotfiles": true,
+    "sitrep@atnook-dotfiles": true
   },
   "extraKnownMarketplaces": {
     "openai-codex": {
