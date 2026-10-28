@@ -1,18 +1,24 @@
-alias eza="eza --icons=auto --git --group-directories-first"
-alias ls="eza"
-alias ll="eza -l"
-alias la="eza -a"
-alias lt="eza --tree"
-alias lla="eza -la"
-alias cat="bat --paging=never"
+# 未導入の機(class を選んでいない Linux など)で ls / cat を壊さないよう、ある時だけ置き換える
+if (( $+commands[eza] )); then
+  alias eza="eza --icons=auto --git --group-directories-first"
+  alias ls="eza"
+  alias ll="eza -l"
+  alias la="eza -a"
+  alias lt="eza --tree"
+  alias lla="eza -la"
+fi
+(( $+commands[bat] )) && alias cat="bat --paging=never"
 
 # Windows 側コマンドは PATH に足さず絶対パスの別名にする。
 # PATH に 1 ディレクトリ足すごとに打鍵レイテンシが数 ms 増えるが、別名は増えない
 # (dot_zshrc の path フィルタを参照)。
 # 注意: 別名は対話シェル限定。スクリプトから呼ぶ場合は絶対パスを直接書くこと。
-alias explorer.exe="/mnt/c/WINDOWS/explorer.exe"
-alias clip.exe="/mnt/c/WINDOWS/system32/clip.exe"
-alias pwsh="/mnt/c/Program\ Files/PowerShell/7/pwsh.exe"
+# WSL 以外では Windows 側が無いので定義しない。
+if [[ -n $WSL_DISTRO_NAME ]]; then
+  alias explorer.exe="/mnt/c/WINDOWS/explorer.exe"
+  alias clip.exe="/mnt/c/WINDOWS/system32/clip.exe"
+  alias pwsh="/mnt/c/Program\ Files/PowerShell/7/pwsh.exe"
+fi
 
 # abbr はこのファイルを唯一の定義元とするため session スコープで宣言する。
 # 既定の user スコープはストア(~/.config/zsh-abbr/user-abbreviations)へ永続化され、
@@ -49,5 +55,4 @@ alias pwsh="/mnt/c/Program\ Files/PowerShell/7/pwsh.exe"
 
   # Claude Code
   abbr -S -f "clauded"="claude --dangerously-skip-permissions"
-  abbr -S -f "claudexd"="claudex --dangerously-skip-permissions"
 }

@@ -1,5 +1,6 @@
 # ── mise グローバル設定(dotfiles 管理分)──
-# ~/.config/mise/conf.d/10-dotfiles.toml として配置される。
+# mise-link.sh / mise-link.ps1 が、config.<env>.toml とともに mise の設定ディレクトリ
+# (既定は ~/.config/mise、MISE_CONFIG_DIR で変更可)へ link する。
 # ~/.config/mise/config.toml は omarchy の mise ラッパー(`mise use -g`)や手動の
 # `mise use -g` が書き込む machine-local ファイルなので、ここでは管理しない。
 #
@@ -73,14 +74,3 @@ sheldon = { version = "0", os = "linux" }
 # symlink にせず、repo 側のキーだけを実ファイルへ merge する。
 # アプリが追加したキーは保持され、repo 側にあるキーは apply で repo の値に戻る。
 "~/.claude/settings.json/shared" = { merge = true }
-
-# mise 設定自身の配置
-"~/.config/mise/conf.d/10-dotfiles.toml" = { mode = "symlink" }
-"~/.config/mise/config.personal.toml" = { mode = "symlink" }
-"~/.config/mise/config.work.toml" = { mode = "symlink" }
-"~/.config/mise/config.omarchy.toml" = { mode = "symlink" }
-"~/.config/mise/config.wsldebian.toml" = { mode = "symlink" }
-"~/.config/mise/config.linux.toml" = { mode = "symlink" }
-"~/.config/mise/config.windows.toml" = { mode = "symlink" }
-"~/.config/mise/config.cli.toml" = { mode = "symlink" }
-"~/.config/mise/config.personal-cli.toml" = { mode = "symlink" }

@@ -1,4 +1,5 @@
-# このファイルを ~/.config/mise/miserc.local.toml にコピーし、マシンに合わせて編集する。
+# このファイルを mise の設定ディレクトリ(既定は ~/.config/mise、MISE_CONFIG_DIR で変更可)に
+# miserc.local.toml としてコピーし、マシンに合わせて編集する。
 # miserc.local.toml は他の config より先に読み込まれ、どの environment を有効化するかを宣言する
 # (mise 公式の推奨手段)。env は次の 3 軸から選ぶ:
 #   profile : personal / work

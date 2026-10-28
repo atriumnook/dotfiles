@@ -4,24 +4,39 @@
 
 ## 新しいマシンのセットアップ
 
+前提は git と mise。mise を mise.run で入れた場合、本体は `~/.local/bin` に置かれる。
+
+Linux / WSL:
+
 ```sh
-git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles && cd ~/.dotfiles
-mkdir -p ~/.config/mise/conf.d
-ln -s ~/.dotfiles/.config/mise/conf.d/10-dotfiles.toml ~/.config/mise/conf.d/
-cp .config/mise/miserc.local.toml.example ~/.config/mise/miserc.local.toml
-$EDITOR ~/.config/mise/miserc.local.toml   # env を README の「environment」の表に合わせる
+git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles
+~/.dotfiles/mise-link.sh   # mise の設定ディレクトリへ repo の mise 設定を link する
+d=${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}
+cp ~/.dotfiles/.config/mise/miserc.local.toml.example "$d/miserc.local.toml"
+$EDITOR "$d/miserc.local.toml"   # env を README の「environment」の表に合わせる
 mise bootstrap --dry-run   # 実行内容の確認
 mise bootstrap             # dotfiles を配置し、settings.json などを合成してから、ツールをインストールする
 mise bootstrap status      # 結果の確認
 ```
 
-`mise bootstrap` は dotfiles の適用とツールのインストール(`mise install` 相当)を1回で行う。
-`config.<env>.toml` 自体も dotfiles として配置されるが、mise は配置した設定を読み直してから
-残りを適用するので、1回で environment 別の dotfiles まで入る。グローバル設定(`~/.config/mise`)に
-`mise trust` は要らない。
+Windows(PowerShell。旧 chezmoi から移行するマシンでは、先に「Windows への適用」を行う):
 
-選んでいない environment の `config.<env>.toml`(例: Linux での `config.windows.toml`)について
-`not trusted` の警告が出るが、適用には影響しない。
+```powershell
+git clone https://github.com/atriumnook/dotfiles.git "$HOME\.dotfiles"
+& "$HOME\.dotfiles\mise-link.ps1"   # Developer Mode が必要
+$d = if ($env:MISE_CONFIG_DIR) { $env:MISE_CONFIG_DIR } else { "$HOME\.config\mise" }
+Copy-Item "$HOME\.dotfiles\.config\mise\miserc.local.toml.example" "$d\miserc.local.toml"
+notepad "$d\miserc.local.toml"   # env = ["personal", "windows", "cli", "personal-cli"]
+mise bootstrap --dry-run
+mise bootstrap
+mise bootstrap status
+```
+
+`mise bootstrap` は dotfiles の適用とツールのインストール(`mise install` 相当)を1回で行う。
+設定は開始時に1度だけ読むため、`config.<env>.toml` は `[dotfiles]` ではなく `mise-link` で先に
+link しておく。`[dotfiles]` の配置先は `~/` か絶対パスに固定されるため、`MISE_CONFIG_DIR` で
+設定ディレクトリを変えている環境(コンテナなど)に合わせられない。`mise-link` はそれに従う。
+グローバル設定に `mise trust` は要らない。
 
 dotfiles だけを適用し直すときは `mise dot apply`(`mise dotfiles apply` の別名)を使う。
 
@@ -46,14 +61,14 @@ omarchy 機では omarchy が Cursor CLI を入れる(公式インストーラ�
 
 ```sh
 cd ~/.dotfiles && git pull
+./mise-link.sh             # 新しい config.<env>.toml があれば link する(Windows では .\mise-link.ps1)
 mise bootstrap --dry-run
 mise bootstrap
 ```
 
 environment が増えたとき(例: module の `cli` / `personal-cli`)は、`git pull` の前に
 `miserc.local.toml` の `env` を README の表に合わせて更新する。`env` に入れていない environment のツールは、
-`mise bootstrap` を実行しても入らない。新しい `config.<env>.toml` は `mise bootstrap` が配置するまで
-読まれないため、`env` を更新してから `mise bootstrap` を実行するまでの間は、その environment のツールを使えない。
+`mise bootstrap` を実行しても入らない。
 
 ### `~/.gitconfig` を machine-local に移す(1回だけ)
 
@@ -65,7 +80,7 @@ symlink を実ファイルに置き換える。symlink のままだと、`git pu
 cp --remove-destination "$(readlink -f ~/.gitconfig)" ~/.gitconfig   # symlink を実ファイルに置き換える
 cat ~/.gitconfig.local >> ~/.gitconfig 2>/dev/null && rm ~/.gitconfig.local   # 旧 .gitconfig.local を統合する
 $EDITOR ~/.gitconfig   # このマシンの credential・user だけを残し、共通設定の節は削る
-cd ~/.dotfiles && git pull && mise bootstrap   # 先頭に共通設定の [include] が入る
+cd ~/.dotfiles && git pull && ./mise-link.sh && mise bootstrap   # 先頭に共通設定の [include] が入る
 git config --show-origin --list | grep dotfiles.gitconfig   # 共通設定が読まれていることを確認する
 ```
 
@@ -81,10 +96,11 @@ $c = $c -replace '(?ms)^# USER-CONFIG:START.*?^# USER-CONFIG:END\s*', ''
 Set-Content -LiteralPath $p -Value $c -Encoding utf8
 ```
 
-続けて「新しいマシンのセットアップ」を実施する。miserc は `env = ["personal", "windows", "cli", "personal-cli"]`。
+続けて「新しいマシンのセットアップ」の Windows の手順を実施する。
 
 - symlink は Developer Mode が有効なら作成される。権限が無い場合、mise はファイルをコピーする
-  (コピーの場合は repo 側を編集して `apply` する)。
+  (コピーの場合は repo 側を編集して `apply` する)。`mise-link.ps1` は symlink だけを作るので、
+  Developer Mode が無い場合は、同じファイルを `Copy-Item` でコピーし、`git pull` のたびにコピーし直す。
 - profile への追記は `# >>> mise:loader >>>` ブロックとして行われ、ブロック外の記述は保持される。
   適用時に行末が CRLF から LF に変わる場合があるが、PowerShell の動作には影響しない。
 - Windows では chezmoi を移行完了まで残す想定。mise と chezmoi の両方から同じファイルに書かないこと。

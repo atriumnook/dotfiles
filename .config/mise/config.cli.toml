@@ -1,10 +1,18 @@
 # module=cli(omarchy 以外の全マシンが選ぶ)。omarchy が pacman / omarchy-mise-install で提供する
 # ツールを mise で補う。omarchy 機では選ばず、omarchy の管理に任せる。
+
+# node の実行に要る共有ライブラリ。最小構成の Debian / Ubuntu には無い。apt-get が無い環境では
+# mise が飛ばす。
+[bootstrap.packages]
+"apt:libatomic1" = "latest"
+
 [tools]
 node = "26"
 fd = "10"
 fzf = "0"
 jq = "1"
+# git の core.editor(dotfiles.gitconfig)が使うため、Windows でも入れる
+neovim = "0"
 ripgrep = "15"
 starship = "1"
 usage = "3"

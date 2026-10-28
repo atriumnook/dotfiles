@@ -11,7 +11,9 @@ chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下
 |---|---|
 | `.config/mise/conf.d/10-dotfiles.toml` | 全 OS 共通の設定(`[settings]` / `[tools]` / `[dotfiles]`) |
 | `.config/mise/config.<env>.toml` | environment 別の上乗せ(下表) |
+| `mise-link.sh` / `mise-link.ps1` | 上の2つを mise の設定ディレクトリ(`MISE_CONFIG_DIR`、既定は `~/.config/mise`)に link する |
 | `Documents/PowerShell/conf.d/*.ps1` | Windows の PowerShell 設定(copy で配置) |
+| `.github/` | 素の環境で `mise bootstrap` を検証する CI(`$HOME` には配置しない) |
 | 上記以外 | `$HOME` 相対のファイル本体 |
 
 `~/.config/mise/config.toml` は **管理しない**。omarchy の mise ラッパーや手動の `mise use -g` が
@@ -24,7 +26,8 @@ git は後に書いた値を優先するので、`~/.gitconfig` に書いた値�
 
 ## environment
 
-`~/.config/mise/miserc.local.toml` で有効化する environment を宣言する(マシン固有のため repo には置かない)。
+mise の設定ディレクトリ(既定は `~/.config/mise`)の `miserc.local.toml` で有効化する environment を宣言する
+(マシン固有のため repo には置かない)。
 mise は `miserc.local.toml` を `miserc.toml` より優先して読み、マシン固有の選択には `.local` を使うのが公式の推奨
 ([miserc locations](https://mise.jdx.dev/configuration.html#miserc-locations))。
 環境変数 `MISE_ENV` や `-E` はすべての miserc より優先されるため、miserc を変更したら
