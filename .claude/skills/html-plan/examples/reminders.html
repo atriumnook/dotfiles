@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tasklet のリマインダー</title>
+<link rel="stylesheet" href="../runtime/plan.css">
+<script src="../runtime/plan.js" defer></script>
+<style data-mock-shared>
+  .task { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #ece9e2; }
+  .box { width: 16px; height: 16px; border: 1.5px solid #9a978f; border-radius: 4px; flex: none; }
+</style>
+<body>
+<hp-plan new="6" changed="3">
+  <h1>Tasklet のタスク期限リマインダー</h1>
+  <hp-why>
+    <hp-quote from="ユーザー" via="prompt">タスクの期限前に通知がほしい。期限の前日と1時間前に知らせてくれると助かる。</hp-quote>
+    <hp-quote from="ユーザー" via="prompt">通知が2回届くことがあると困る。</hp-quote>
+  </hp-why>
+
+  <hp-claim>
+    <p>ユーザーはタスクごとに通知の時刻を設定できる。</p>
+    <hp-mock w="420" caption="タスク詳細の期限の下に、通知の行を足す。">
+      <template>
+        <div class="ui col">
+          <div class="row"><b style="font-size:16px">見積書を送る</b><span class="grow"></span><span class="badge">期限 11/5 18:00</span></div>
+          <hr>
+          <div class="row" data-ref="picker"><span class="muted">通知</span><span class="grow"></span><span class="btn">前日 18:00 ×</span><span class="btn">1時間前 ×</span><span class="btn">＋ 追加</span></div>
+          <div class="menu" data-ref="menu" style="width:180px;margin-left:auto"><div>期限の時刻</div><div class="on">1時間前</div><div>前日の同じ時刻</div><div>日時を指定…</div></div>
+        </div>
+      </template>
+      <hp-pin ref="picker" anchor="tr" title="新しい行">期限が未設定のタスクでは表示しない。</hp-pin>
+      <hp-pin ref="menu" anchor="tr" title="候補は3つと日時指定"></hp-pin>
+    </hp-mock>
+
+    <hp-claim>
+      <p>設定した時刻は <code>reminders</code> に保存し、その時点では送らない。</p>
+      <hp-calls caption="Enter で行のコードを開く。不要な行は x で取り消す。">
+<script type="text/plain">
+~ TaskDetail()                          @ web/src/tasks/TaskDetail.tsx:58
++   **ReminderPicker**()                @ web/src/tasks/ReminderPicker.tsx:1
++     POST /api/tasks/:id/reminders     @ web/src/api/reminders.ts:12
+    saveTask()                          @ web/src/tasks/save.ts:30
+
+~ router.post('/tasks/:id/reminders')   @ api/src/reminders/routes.ts:24
++   **createReminder**(taskId, at)      @ api/src/reminders/store.ts:18
+?   trackReminderCreated()              @ api/src/metrics.ts:40  -- 提案。計測が不要なら取り消す
+</script>
+      </hp-calls>
+      <hp-claim at="api/src/reminders/routes.ts:24">
+        <p>createReminder() を呼ぶ route</p>
+        <hp-code language="ts" title="api/src/reminders/routes.ts" sketch>
+<script type="text/plain">
+router.post('/tasks/:id/reminders', async (req, res) => {
+  const task = await tasks.get(req.params.id, req.user.id);
+  if (!task?.dueAt) return res.status(422).json({ error: 'due_at_required' });
+  const reminder = await createReminder(task.id, parseRemindAt(req.body, task.dueAt));
+  res.status(201).json(reminder);
+});
+</script>
+        </hp-code>
+      </hp-claim>
+    </hp-claim>
+
+    <hp-claim>
+      <p>1つのタスクに設定できる通知は3件までにする。</p>
+      <hp-code language="ts" title="api/src/reminders/store.ts" sketch hl="3">
+<script type="text/plain">
+export async function createReminder(taskId: string, at: Date) {
+  const count = await db.reminders.count({ taskId, status: 'scheduled' });
+  if (count >= LIMIT_PER_TASK) throw new HttpError(409, 'reminder_limit');
+  return db.reminders.insert({ taskId, remindAt: at });
+}
+</script>
+        <hp-pin line="3" title="上限を超えたら 409 を返す">画面は追加ボタンを無効にする。</hp-pin>
+      </hp-code>
+      <hp-ask id="limit">
+        <p>1タスクあたりの通知の上限をいくつにするか。</p>
+        <label><input type="radio" name="limit" value="3" checked> 3件 <small>依頼の2回に、余裕を1件足した数</small></label>
+        <label><input type="radio" name="limit" value="10"> 10件 <small>画面に一覧の表示が要る</small></label>
+      </hp-ask>
+    </hp-claim>
+  </hp-claim>
+
+  <hp-claim>
+    <p>設定した時刻に、worker が通知を1回だけ送る。</p>
+    <hp-machine caption="state を押すと、その state のときの画面を表示する。">
+<script type="text/plain">
+state scheduled initial  # 時刻を待っている
+state sending            # worker が行を確保して送信している
+state sent final         # 送信した
+state failed             # 送信に失敗し、エラーを保存した
+state cancelled final    # ユーザーが取り消した
+
+| scheduled | sending | sent |
+| cancelled | failed  | .    |
+
+scheduled -> sending   : 時刻になった
+sending   -> sent      : 成功
+sending   -> failed    : エラー
+scheduled -> cancelled : 取り消し
+failed    -> cancelled : 取り消し
++ failed  -> sending   : 再送
+</script>
+      <div data-state="scheduled sending sent cancelled">
+        <hp-mock w="380"><template><div class="task"><span class="box"></span><span class="grow">見積書を送る</span><span class="small muted">🔔 11/5 17:00</span></div></template></hp-mock>
+      </div>
+      <div data-state="failed">
+        <hp-mock w="380"><template><div class="task"><span class="box"></span><span class="grow">見積書を送る</span><span class="small" style="color:#b02a1d">通知に失敗</span></div></template></hp-mock>
+      </div>
+    </hp-machine>
+
+    <hp-claim>
+      <p>worker は送る前に行を <code>sending</code> に更新し、二重送信を防ぐ。</p>
+      <hp-code language="sql" title="worker/src/reminders/claim.sql" sketch hl="5">
+<script type="text/plain">
+UPDATE reminders SET status = 'sending', attempts = attempts + 1
+WHERE id IN (
+  SELECT id FROM reminders
+  WHERE status = 'scheduled' AND remind_at <= $1
+  ORDER BY remind_at LIMIT 100 FOR UPDATE SKIP LOCKED
+)
+RETURNING id, task_id;
+</script>
+        <hp-pin line="5" title="SKIP LOCKED">2つの worker が同じ行を取らない。</hp-pin>
+      </hp-code>
+      <hp-claim at="worker/src/tick.ts:12">
+        <p>毎分の tick から呼ぶ</p>
+        <hp-code language="ts" file="worker/src/tick.ts" start="10" diff>
+<script type="text/plain">
+ export async function tick(now: Date) {
+   await sendDigests(now);
++  await sendDueReminders(now);
+ }
+</script>
+        </hp-code>
+      </hp-claim>
+    </hp-claim>
+
+    <hp-claim>
+      <p>送信に失敗した通知は <code>failed</code> に残し、エラーを保存する。</p>
+      <hp-code language="ts" title="worker/src/reminders/send.ts" sketch>
+<script type="text/plain">
+try {
+  await push.send(r.deviceTokens, message(r));
+  await db.reminders.update(r.id, { status: 'sent' });
+} catch (e) {
+  await db.reminders.update(r.id, { status: 'failed', lastError: String(e) });
+}
+</script>
+      </hp-code>
+      <hp-ask id="retry">
+        <p>失敗した通知を自動で再送するか。</p>
+        <label><input type="radio" name="retry" value="none" checked> 再送しない <small>状態図の「再送」の遷移がなくなる</small></label>
+        <label><input type="radio" name="retry" value="3x5m"> 5分おきに3回まで <small>期限を過ぎたら送らない</small></label>
+      </hp-ask>
+    </hp-claim>
+  </hp-claim>
+
+  <hp-claim>
+    <p>通知を開くと、そのタスクの詳細画面が開く。</p>
+    <hp-mock frame="phone" w="360" caption="通知の本文には、タスク名と期限を出す。">
+      <template>
+        <div class="ui" style="background:#e9e6df;min-height:150px">
+          <div class="card" data-ref="note"><div class="row small muted"><b style="color:#1d1d1b">Tasklet</b><span class="grow"></span>今</div><div><b>見積書を送る</b></div><div class="small">期限まで1時間(11/5 18:00)</div></div>
+        </div>
+      </template>
+      <hp-pin ref="note" anchor="br" title="タップで /tasks/:id を開く"></hp-pin>
+    </hp-mock>
+    <hp-ask id="channel">
+      <p>通知を送る経路をどれにするか。</p>
+      <label><input type="radio" name="channel" value="push" checked> push 通知だけ <small>アプリを入れていない人には届かない</small></label>
+      <label><input type="radio" name="channel" value="push+mail"> push 通知とメール <small>メール用の template が増える</small></label>
+    </hp-ask>
+    <hp-ask id="tz">
+      <p>「前日の同じ時刻」は、どの timezone で決めるか。</p>
+      <label><input type="radio" name="tz" value="account" checked> アカウントの timezone <small>端末を変えても同じ時刻になる</small></label>
+      <label><input type="radio" name="tz" value="device"> 設定した端末の timezone</label>
+    </hp-ask>
+  </hp-claim>
+
+  <hp-claim kind="shared">
+    <p>新しいテーブル <code>reminders</code> を1つ追加する。</p>
+    <hp-code id="schema" language="sql" title="migrations/0031_reminders.sql" sketch editable caption="編集すると、差分が回答に入る。">
+<script type="text/plain">
+CREATE TABLE reminders (
+  id         uuid PRIMARY KEY,
+  task_id    uuid NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  remind_at  timestamptz NOT NULL,
+  status     text NOT NULL DEFAULT 'scheduled',  -- scheduled | sending | sent | failed | cancelled
+  attempts   int NOT NULL DEFAULT 0,
+  last_error text
+);
+CREATE INDEX reminders_due ON reminders (remind_at) WHERE status = 'scheduled';
+</script>
+    </hp-code>
+  </hp-claim>
+
+  <hp-claim kind="scope">
+    <p>変更しないもの</p>
+    <ul>
+      <li>タスクの期限そのものの設定画面</li>
+      <li>毎朝のまとめメール(<code>sendDigests</code>)</li>
+      <li>push 通知の送信基盤</li>
+    </ul>
+  </hp-claim>
+</hp-plan>
+</body>
+</html>
