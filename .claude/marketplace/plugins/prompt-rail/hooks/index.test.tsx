@@ -30,6 +30,9 @@ const engineDraws = (on: On) => {
   })
 }
 
+// 帯の描画のうちレールの部分。先頭はレールより下にある描画(engineDraws の engine)
+const railOf = (drawn: any) => drawn.children[1]
+
 const UUIDS = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222', '33333333-3333-4333-8333-333333333333']
 
 // 3つのプロンプト行を描く。2つ目と3つ目が画面に見えている
@@ -59,7 +62,7 @@ test('点字の tick で読んでいる位置だけを高く明るくし、カ�
   const pills = await ui.findAll({ type: 'Text', text: ' 2 ' })
   expect(pills.map(p => p.props.backgroundColor)).toEqual(['subtle', 'suggestion'])
   // 上に空行を1行置く
-  expect(((await ui.drawn()) as any).children[0].children[0].children).toEqual([' '])
+  expect(railOf(await ui.drawn()).children[0].children[0].children).toEqual([' '])
 })
 
 test('着地したプロンプトを読んでいる位置にし、それより前の行が残っていても無視する', () => {
@@ -109,7 +112,7 @@ test('2行しか無ければ、上に空行を置き、カードを tick と同�
   await clock.advance(200)
 
   const ui = await $.ui.mount({ plugin: 'prompt-rail', surface: 'terminal', component: 'AbovePrompt', props: band(2) })
-  const root = (await ui.drawn()) as any
+  const root = railOf(await ui.drawn())
   expect(root.children).toHaveLength(2)
   expect(root.children[0].children[0].children).toEqual([' '])
   const row = root.children[1]
@@ -119,6 +122,19 @@ test('2行しか無ければ、上に空行を置き、カードを tick と同�
   expect(JSON.stringify(card)).toContain('二つ目の依頼')
   expect(card.children.filter((child: any) => child.props?.position === 'absolute')).toHaveLength(3)
   expect(await ui.find({ type: 'Text', text: /╭/ })).toBeUndefined()
+})
+
+test('下にある mod とエンジンの描画を残し、レールをその下に描く', async ($, on) => {
+  const clock = mock.clock(on)
+  engineDraws(on)
+  await drawPrompts($)
+  await clock.advance(200)
+
+  const ui = await $.ui.mount({ plugin: 'prompt-rail', surface: 'terminal', component: 'AbovePrompt', props: band(10) })
+  const drawn = (await ui.drawn()) as any
+  expect(drawn.children).toHaveLength(2)
+  expect(drawn.children[0].children).toEqual(['engine'])
+  expect(JSON.stringify(railOf(drawn))).toContain('jump-1')
 })
 
 test('読んでいる位置は、見えているプロンプトの行を、それより前の応答の行より優先する', () => {

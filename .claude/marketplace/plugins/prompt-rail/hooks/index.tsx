@@ -365,6 +365,8 @@ export const register: Register = on => {
     if (e.props.view.agentId !== rail.viewAgent) rail.screen.clear()
     rail.viewAgent = e.props.view.agentId
     if (e.props.hasSurvey || rail.viewAgent !== undefined || rail.list.length === 0) return next(e)
+    // 帯は他の mod と分け合う。下にある mod とエンジンの描画を捨てずに、レールの上に残す
+    const below = await next(e)
     const { Box, Text, Button } = $.ui.resolve(e)
 
     const list = rail.list
@@ -493,13 +495,16 @@ export const register: Register = on => {
     // 余白は marginTop ではなく空行として描く(帯の高さの計算に確実に入れるため)
     return (
       <Box flexDirection="column">
-        {layout.margin > 0 ? (
-          <Box height={1}>
-            <Text> </Text>
-          </Box>
-        ) : null}
-        {cards}
-        {rail1}
+        {below}
+        <Box flexDirection="column">
+          {layout.margin > 0 ? (
+            <Box height={1}>
+              <Text> </Text>
+            </Box>
+          ) : null}
+          {cards}
+          {rail1}
+        </Box>
       </Box>
     )
   })
