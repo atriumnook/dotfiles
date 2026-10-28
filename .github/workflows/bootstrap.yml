@@ -1,4 +1,4 @@
-# 素の環境で mise bootstrap を実行し、すぐ使える状態になるかを方式ごとに検証する。
+# 素の環境で mise bootstrap を実行し、すぐ使える状態になるかを検証する。
 # 検証の中身は .github/scripts/bootstrap-test.{sh,ps1} を参照。
 name: bootstrap
 
@@ -22,14 +22,13 @@ env:
 
 jobs:
   linux:
-    name: ${{ matrix.target }} / ${{ matrix.method }}
+    name: ${{ matrix.target }}
     runs-on: ubuntu-latest
     container: ${{ matrix.container }}
     timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
-        method: [link, config-dir]
         target: [debian, archlinux, custom-mise-dirs]
         include:
           - target: debian
@@ -38,6 +37,7 @@ jobs:
             container: archlinux:latest
           # mise の公式 Docker イメージと同じく MISE_DATA_DIR / MISE_CONFIG_DIR / MISE_CACHE_DIR を変える
           - target: custom-mise-dirs
+            container: debian:stable-slim
             custom_mise_dirs: "1"
     env:
       TEST_TARGET: ${{ matrix.target }}
@@ -50,26 +50,20 @@ jobs:
         run: |
           if command -v pacman >/dev/null; then
             pacman -Syu --noconfirm --needed git zsh curl unzip xz
-          elif [ "$(id -u)" = 0 ]; then
-            apt-get update -q && apt-get install -y -q git zsh curl ca-certificates unzip xz-utils bzip2
           else
-            sudo apt-get update -q && sudo apt-get install -y -q zsh
+            apt-get update -q && apt-get install -y -q git zsh curl ca-certificates unzip xz-utils bzip2
           fi
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Bootstrap and verify
         shell: bash
-        run: .github/scripts/bootstrap-test.sh ${{ matrix.method }}
+        run: .github/scripts/bootstrap-test.sh
 
   windows:
-    name: windows / ${{ matrix.method }}
+    name: windows
     runs-on: windows-latest
     timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        method: [link, config-dir]
     env:
       TEST_MISE_ENV: '["personal", "windows", "cli", "personal-cli"]'
     steps:
@@ -78,4 +72,4 @@ jobs:
           persist-credentials: false
       - name: Bootstrap and verify
         shell: pwsh
-        run: .github/scripts/bootstrap-test.ps1 -Method ${{ matrix.method }}
+        run: .github/scripts/bootstrap-test.ps1

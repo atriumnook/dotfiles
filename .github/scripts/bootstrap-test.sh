@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # 素の HOME で SETUP.md の新規セットアップを再現し、mise bootstrap の結果を検証する(Linux 用)。
 #
-# usage: bootstrap-test.sh <link|config-dir>
-#   link       : 現行方式。conf.d/10-dotfiles.toml を手で link し、mise dot apply → mise bootstrap
-#   config-dir : 比較する方式。mise bootstrap --config-dir で mise の設定ディレクトリごと repo に link する
+# usage: bootstrap-test.sh
 #
 # 環境変数:
 #   TEST_MISE_VERSION     インストールする mise のバージョン
@@ -14,7 +12,6 @@
 # 検証は失敗しても止めずに最後まで行い、結果を GITHUB_STEP_SUMMARY にまとめる。
 set -uo pipefail
 
-method="$1"
 repo="$HOME/.dotfiles"
 mise="$HOME/.local/bin/mise"
 failures=()
@@ -78,6 +75,14 @@ second_run_noop() {
   ! grep -E '^mise (files|edits): (applied|created|removed)' <<<"$out"
 }
 
+# 設定が1つも読まれていなくても bootstrap status は収束と判定するため、env 別の設定まで読まれたかを見る
+env_config_loaded() {
+  local out
+  out=$("$mise" config ls 2>&1)
+  printf '%s\n' "$out"
+  grep -q 'config\.cli\.toml' <<<"$out"
+}
+
 repo_clean() {
   local out
   out=$(git -C "$repo" status --porcelain --untracked-files=all)
@@ -97,32 +102,12 @@ install "$tmp/mise/bin/mise" "$mise"
 cp -R "$GITHUB_WORKSPACE" "$repo"
 
 # --- セットアップ(SETUP.md の手順) ---
-case "$method" in
-link)
-  mkdir -p "$HOME/.config/mise/conf.d"
-  ln -s "$repo/.config/mise/conf.d/10-dotfiles.toml" "$HOME/.config/mise/conf.d/"
-  printf 'env = %s\n' "$TEST_MISE_ENV" >"$HOME/.config/mise/miserc.local.toml"
-  check "mise dot apply" "$mise" dot apply -y
-  check "mise bootstrap" "$mise" bootstrap -y
-  ;;
-config-dir)
-  # この方式では repo の .config/mise がそのまま設定ディレクトリになる。mise 設定自身を配置する
-  # エントリーは配置元と配置先が同じファイルになって衝突するため外し、machine-local の config.toml を
-  # gitignore する(この方式を採る場合の repo の変更を再現する)。
-  sed -i '/^# mise 設定自身の配置/,$d' "$repo/.config/mise/conf.d/10-dotfiles.toml"
-  echo '/.config/mise/config.toml' >>"$repo/.gitignore"
-  git -C "$repo" -c user.name=ci -c user.email=ci@localhost commit -qam "ci: config-dir 方式の変更"
-  printf 'env = %s\n' "$TEST_MISE_ENV" >"$repo/.config/mise/miserc.local.toml"
-  check "mise bootstrap --config-dir" "$mise" bootstrap \
-    --from "$(git -C "$repo" remote get-url origin)" --from-dir "$repo" --config-dir .config/mise -y
-  ;;
-*)
-  echo "unknown method: $method" >&2
-  exit 2
-  ;;
-esac
+check "mise-link.sh" "$repo/mise-link.sh"
+printf 'env = %s\n' "$TEST_MISE_ENV" >"${MISE_CONFIG_DIR:-$HOME/.config/mise}/miserc.local.toml"
+check "mise bootstrap" "$mise" bootstrap -y
 
 # --- 検証 ---
+check "environment 別の設定が読まれている" env_config_loaded
 check "設定どおりに収束している(bootstrap status --missing)" "$mise" bootstrap status --missing
 
 check "2回目の bootstrap は dotfiles を変更しない" second_run_noop
@@ -148,7 +133,7 @@ ls -la "$HOME/.config" "${MISE_CONFIG_DIR:-$HOME/.config/mise}" 2>&1
 echo "::endgroup::"
 
 {
-  echo "### ${TEST_TARGET:-linux} / $method"
+  echo "### ${TEST_TARGET:-linux}"
   echo
   echo "| | 検証 |"
   echo "|---|---|"

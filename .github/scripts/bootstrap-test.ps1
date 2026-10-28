@@ -1,12 +1,5 @@
 # 素の HOME で SETUP.md の新規セットアップを再現し、mise bootstrap の結果を検証する(Windows 用)。
-# 方式と環境変数は bootstrap-test.sh と同じ。
-#
-# usage: bootstrap-test.ps1 -Method <link|config-dir>
-param(
-    [Parameter(Mandatory)]
-    [ValidateSet("link", "config-dir")]
-    [string] $Method
-)
+# 環境変数は bootstrap-test.sh と同じ。
 
 $ErrorActionPreference = "Continue"
 $Repo = Join-Path $HOME ".dotfiles"
@@ -69,32 +62,18 @@ $env:PATH = "$(Split-Path $Mise);$env:PATH"
 Copy-Item -Recurse -Force $env:GITHUB_WORKSPACE $Repo
 
 # --- セットアップ(SETUP.md の手順) ---
-$MiseConfig = Join-Path $HOME ".config\mise"
-switch ($Method) {
-    "link" {
-        New-Item -ItemType Directory -Force (Join-Path $MiseConfig "conf.d") | Out-Null
-        New-Item -ItemType SymbolicLink -Path (Join-Path $MiseConfig "conf.d\10-dotfiles.toml") `
-            -Target (Join-Path $Repo ".config\mise\conf.d\10-dotfiles.toml") | Out-Null
-        Set-Content (Join-Path $MiseConfig "miserc.local.toml") "env = $env:TEST_MISE_ENV"
-        Check "mise dot apply" { Invoke-Mise dot apply -y }
-        Check "mise bootstrap" { Invoke-Mise bootstrap -y }
-    }
-    "config-dir" {
-        # bootstrap-test.sh の同じ箇所を参照
-        $conf = Join-Path $Repo ".config\mise\conf.d\10-dotfiles.toml"
-        $text = Get-Content -Raw $conf
-        Set-Content $conf ($text -replace "(?s)# mise 設定自身の配置.*$", "")
-        Add-Content (Join-Path $Repo ".gitignore") "/.config/mise/config.toml"
-        git -C $Repo -c user.name=ci -c user.email=ci@localhost commit -qam "ci: config-dir 方式の変更"
-        Set-Content (Join-Path $Repo ".config\mise\miserc.local.toml") "env = $env:TEST_MISE_ENV"
-        $origin = git -C $Repo remote get-url origin
-        Check "mise bootstrap --config-dir" {
-            Invoke-Mise bootstrap --from $origin --from-dir $Repo --config-dir .config/mise -y
-        }
-    }
-}
+Check "mise-link.ps1" { & (Join-Path $Repo "mise-link.ps1") | Out-Host; $? }
+$MiseConfig = if ($env:MISE_CONFIG_DIR) { $env:MISE_CONFIG_DIR } else { Join-Path $HOME ".config\mise" }
+Set-Content (Join-Path $MiseConfig "miserc.local.toml") "env = $env:TEST_MISE_ENV"
+Check "mise bootstrap" { Invoke-Mise bootstrap -y }
 
 # --- 検証 ---
+# bootstrap-test.sh の同じ箇所を参照
+Check "environment 別の設定が読まれている" {
+    $out = & $Mise config ls 2>&1 | Out-String
+    $out
+    $out -match "config\.cli\.toml"
+}
 Check "設定どおりに収束している(bootstrap status --missing)" { Invoke-Mise bootstrap status --missing }
 
 Check "2回目の bootstrap は dotfiles を変更しない" {
@@ -132,7 +111,7 @@ Write-Host "::group::診断情報"
 Get-ChildItem -Force (Join-Path $HOME ".config") -ErrorAction SilentlyContinue | Out-Host
 Write-Host "::endgroup::"
 
-$summary = @("### windows / $Method", "", "| | 検証 |", "|---|---|") + $Results
+$summary = @("### windows", "", "| | 検証 |", "|---|---|") + $Results
 Add-Content $env:GITHUB_STEP_SUMMARY ($summary -join "`n")
 
 if ($Failed) { exit 1 }
