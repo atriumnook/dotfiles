@@ -3,7 +3,6 @@
 bat = "0"
 eza = "0"
 lazygit = "0"
-neovim = "0"
 zoxide = "0"
 
 # omarchy 管理外の機では nvim 設定一式も配布(omarchy 機では未ロードなので触れない)

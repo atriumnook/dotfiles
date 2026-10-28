@@ -5,6 +5,8 @@ node = "26"
 fd = "10"
 fzf = "0"
 jq = "1"
+# git の core.editor(dotfiles.gitconfig)が使うため、Windows でも入れる
+neovim = "0"
 ripgrep = "15"
 starship = "1"
 usage = "3"
