@@ -10,7 +10,7 @@
     },
     {
       "name": "sitrep",
-      "source": "./plugins/sitrep",
+      "source": "./.claude/marketplace/plugins/sitrep",
       "description": "A situation report above the prompt input, colored like an andon: where the work stands, what is unconfirmed, the decision that waits on you and the next step, each a key away from the prompt box."
     }
   ]
