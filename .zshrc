@@ -1,8 +1,9 @@
 # Startup profiling (opt-in: ZSH_PROFILE=1 zsh)
 [[ -n $ZSH_PROFILE ]] && zmodload zsh/zprof
 
-# Add mise shims early so sheldon and other managed tools resolve correctly
-export PATH="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims:$PATH"
+# Add mise (mise.run installs it to ~/.local/bin) and its shims early so sheldon and
+# other managed tools resolve correctly
+export PATH="$HOME/.local/bin:${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims:$PATH"
 
 (( $+commands[sheldon] )) && eval "$(sheldon source)"
 
@@ -47,6 +48,7 @@ unfunction _zsh_bind
 [[ -n $ZSH_PROFILE ]] && zprof
 
 # Added by LM Studio CLI (lms)
-[[ -d $HOME/.lmstudio/bin ]] && export PATH="$PATH:$HOME/.lmstudio/bin"
+# `&&` にすると、無い機で .zshrc の終了ステータスが 1 になり最初のプロンプトがエラー表示になる
+if [[ -d $HOME/.lmstudio/bin ]]; then export PATH="$PATH:$HOME/.lmstudio/bin"; fi
 # End of LM Studio CLI section
 
