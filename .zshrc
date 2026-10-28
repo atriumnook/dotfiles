@@ -2,9 +2,9 @@
 [[ -n $ZSH_PROFILE ]] && zmodload zsh/zprof
 
 # Add mise shims early so sheldon and other managed tools resolve correctly
-export PATH="$HOME/.local/share/mise/shims:$PATH"
+export PATH="${MISE_DATA_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/mise}/shims:$PATH"
 
-eval "$(sheldon source)"
+(( $+commands[sheldon] )) && eval "$(sheldon source)"
 
 (( $+commands[mise] )) && source <(mise activate zsh)
 
@@ -47,6 +47,6 @@ unfunction _zsh_bind
 [[ -n $ZSH_PROFILE ]] && zprof
 
 # Added by LM Studio CLI (lms)
-export PATH="$PATH:/home/atnook/.lmstudio/bin"
+[[ -d $HOME/.lmstudio/bin ]] && export PATH="$PATH:$HOME/.lmstudio/bin"
 # End of LM Studio CLI section
 
