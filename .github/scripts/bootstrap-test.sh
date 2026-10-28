@@ -55,6 +55,14 @@ new_zsh() {
   env -i "${vars[@]}" zsh -lic "$1"
 }
 
+new_zsh_starts() {
+  local code
+  new_zsh 'exit'
+  code=$?
+  echo "exit code: $code"
+  ((code == 0))
+}
+
 new_zsh_quiet() {
   local err
   err=$(new_zsh 'exit' 2>&1 >/dev/null)
@@ -120,7 +128,7 @@ check "設定どおりに収束している(bootstrap status --missing)" "$mise"
 check "2回目の bootstrap は dotfiles を変更しない" second_run_noop
 
 # 初回の zsh は sheldon がプラグインを取得してメッセージを出すため、2回目の起動で stderr を見る
-check "新しい zsh が起動する" new_zsh 'exit'
+check "新しい zsh が起動する" new_zsh_starts
 check "新しい zsh の起動で stderr に何も出ない" new_zsh_quiet
 check "新しい zsh で mise が有効になっている" new_zsh '[[ -n $MISE_SHELL ]]'
 check "新しい zsh で主なコマンドが使える" new_zsh '
