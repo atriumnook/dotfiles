@@ -1,0 +1,10 @@
+{
+  "name": "html-plan-check",
+  "private": true,
+  "type": "module",
+  "description": "html-plan の計画ページを実ブラウザで描画し、アクセシビリティ・はみ出し・重なり・キーボード操作を検査する",
+  "dependencies": {
+    "axe-core": "4.14.0",
+    "playwright-core": "1.64.1"
+  }
+}
