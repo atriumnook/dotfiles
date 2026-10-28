@@ -66,9 +66,7 @@
     "atnook-dotfiles": {
       "source": {
         "source": "github",
-        "repo": "atriumnook/dotfiles",
-        "path": ".claude/marketplace/.claude-plugin/marketplace.json",
-        "sparsePaths": [".claude/marketplace"]
+        "repo": "atriumnook/dotfiles"
       }
     }
   },
