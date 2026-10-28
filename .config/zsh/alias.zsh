@@ -55,5 +55,4 @@ fi
 
   # Claude Code
   abbr -S -f "clauded"="claude --dangerously-skip-permissions"
-  abbr -S -f "claudexd"="claudex --dangerously-skip-permissions"
 }

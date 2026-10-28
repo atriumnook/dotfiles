@@ -4,7 +4,8 @@
 "~/.zshrc" = { mode = "symlink" }
 "~/.zprofile" = { mode = "symlink" }
 "~/.config/zsh/alias.zsh" = { mode = "symlink" }
-"~/.config/zsh/functions/claudex.zsh" = { mode = "symlink" }
+# 廃止した CLIProxyAPI 用の関数。既存のマシンに残る symlink を消す
+"~/.config/zsh/functions/claudex.zsh" = { mode = "absent" }
 "~/.config/sheldon/plugins.toml" = { mode = "symlink" }
 "~/.config/yazi/yazi.toml" = { mode = "symlink" }
 "~/.config/ghostty/config" = { mode = "symlink" }

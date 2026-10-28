@@ -1,4 +1,4 @@
-# profile=personal 専用ツール(旧 $isPersonal ブロック。CLIProxyAPI は proxy 廃止で削除)。
+# profile=personal 専用ツール(旧 $isPersonal ブロック)。
 # omarchy が提供する個人向けツール(codex, pi など)は config.personal-cli.toml に置く。
 [tools]
 buf = "1"
