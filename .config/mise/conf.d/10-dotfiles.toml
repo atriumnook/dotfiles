@@ -57,8 +57,8 @@ sheldon = { version = "0", os = "linux" }
 "~/.claude/output-styles/ELI5.md" = { mode = "symlink" }
 "~/.claude/skills/html-artifact/SKILL.md" = { mode = "symlink" }
 "~/.claude/skills/reframe/SKILL.md" = { mode = "symlink" }
-"~/.claude/skills/unslop-ja/SKILL.md" = { mode = "symlink" }
-"~/.claude/skills/unslop-ja/slides.md" = { mode = "symlink" }
+"~/.claude/skills/clarify-ja/SKILL.md" = { mode = "symlink" }
+"~/.claude/skills/clarify-ja/slides.md" = { mode = "symlink" }
 "~/.config/starship.toml" = { mode = "symlink" }
 
 # ~/.gitconfig は symlink にしない。`git config --global`(gh auth setup-git や omarchy の
