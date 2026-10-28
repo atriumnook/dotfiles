@@ -55,6 +55,8 @@ sheldon = { version = "0", os = "linux" }
 "~/.claude/hooks/executable-scan-secrets.sh" = { mode = "symlink" }
 "~/.claude/hooks/notify-icon.png" = { mode = "symlink" }
 "~/.claude/output-styles/ELI5.md" = { mode = "symlink" }
+"~/.claude/skills/ci-reliability/SKILL.md" = { mode = "symlink" }
+"~/.claude/skills/ci-reliability/diagnosis.md" = { mode = "symlink" }
 "~/.claude/skills/html-artifact/SKILL.md" = { mode = "symlink" }
 "~/.claude/skills/reframe/SKILL.md" = { mode = "symlink" }
 "~/.claude/skills/clarify-ja/SKILL.md" = { mode = "symlink" }
