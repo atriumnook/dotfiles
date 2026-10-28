@@ -23,17 +23,19 @@ Claude Code の起動時に marketplace が GitHub から取り込まれ、promp
     "atnook-dotfiles": {
       "source": {
         "source": "github",
-        "repo": "atriumnook/dotfiles",
-        "path": ".claude/marketplace/.claude-plugin/marketplace.json",
-        "sparsePaths": [".claude/marketplace"]
+        "repo": "atriumnook/dotfiles"
       }
     }
   }
 }
 ```
 
-dotfiles を使わない環境では、この2つを `~/.claude/settings.json` に書く。
-marketplace.json がリポジトリ直下に無いため、`claude plugin marketplace add atriumnook/dotfiles` では登録できない。
+dotfiles を使わない環境では、この2つを `~/.claude/settings.json` に書くか、次のコマンドで登録して入れる。
+
+```bash
+claude plugin marketplace add atriumnook/dotfiles
+claude plugin install prompt-rail@atnook-dotfiles
+```
 
 `claude plugin list` で `prompt-rail@atnook-dotfiles` が `Status: ✔ enabled` なら導入済み。
 
