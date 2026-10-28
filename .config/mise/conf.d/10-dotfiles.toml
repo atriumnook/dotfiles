@@ -14,6 +14,9 @@
 lockfile = true
 disable_backends = ["asdf", "vfox"]
 minimum_release_age_excludes = ["claude", "codex", "antigravity-cli"]
+# config.<env>.toml の配置元。信頼しないと、選んでいない environment の分を解析するたびに
+# `not trusted` の警告が出る。
+trusted_config_paths = ["~/.dotfiles/.config/mise"]
 
 # omarchy / システム管理下のパスを history の capture/autosave から恒久除外
 [history]
