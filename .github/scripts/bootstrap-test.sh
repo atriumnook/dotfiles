@@ -26,11 +26,14 @@ check() {
   echo "::group::$name"
   if "$@"; then
     results+=("| ✅ | $name |")
+    echo "::endgroup::"
+    echo "PASS: $name"
   else
     results+=("| ❌ | $name |")
     failures+=("$name")
+    echo "::endgroup::"
+    echo "FAIL: $name"
   fi
-  echo "::endgroup::"
 }
 
 # checkout 先にいると、mise がそこの .config/mise をプロジェクトの設定として読む。
@@ -127,8 +130,8 @@ check "新しい zsh で主なコマンドが使える" new_zsh '
   done
   exit $rc'
 
-# omarchy や手動の `mise use -g` が書くファイルが repo に入らないこと
-"$mise" use -g jq@1 >/dev/null 2>&1
+# omarchy や手動の `mise use -g` で repo に無いツールを足しても、repo に書き込まれないこと
+"$mise" use -g shellcheck@0 >/dev/null 2>&1
 check "mise use -g で repo が変更されない" repo_clean
 
 echo "::group::診断情報"

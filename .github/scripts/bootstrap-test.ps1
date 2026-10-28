@@ -26,13 +26,15 @@ function Check([string] $Name, [scriptblock] $Block) {
     } catch {
         Write-Host $_
     }
+    Write-Host "::endgroup::"
     if ($ok) {
         $Results.Add("| ✅ | $Name |")
+        Write-Host "PASS: $Name"
     } else {
         $Results.Add("| ❌ | $Name |")
+        Write-Host "FAIL: $Name"
         $script:Failed = $true
     }
-    Write-Host "::endgroup::"
 }
 
 function Invoke-Mise {
@@ -117,7 +119,8 @@ if ($missing) { "not found: $missing"; exit 1 }
     $r.Code -eq 0
 }
 
-& $Mise use -g jq@1 *> $null
+# bootstrap-test.sh の同じ箇所を参照
+& $Mise use -g shellcheck@0 *> $null
 Check "mise use -g で repo が変更されない" {
     $out = git -C $Repo status --porcelain --untracked-files=all
     $out
