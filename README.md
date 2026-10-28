@@ -12,6 +12,7 @@ chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下
 | `.config/mise/conf.d/10-dotfiles.toml` | 全 OS 共通の設定(`[settings]` / `[tools]` / `[dotfiles]`) |
 | `.config/mise/config.<env>.toml` | environment 別の上乗せ(下表) |
 | `Documents/PowerShell/conf.d/*.ps1` | Windows の PowerShell 設定(copy で配置) |
+| `.github/` | 素の環境で `mise bootstrap` を検証する CI(`$HOME` には配置しない) |
 | 上記以外 | `$HOME` 相対のファイル本体 |
 
 `~/.config/mise/config.toml` は **管理しない**。omarchy の mise ラッパーや手動の `mise use -g` が
