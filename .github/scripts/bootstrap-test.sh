@@ -33,6 +33,11 @@ check() {
   echo "::endgroup::"
 }
 
+# checkout 先にいると、mise がそこの .config/mise をプロジェクトの設定として読む。
+# umask は一般的なユーザー環境に合わせる(runner の 002 だと zsh の compinit が安全でないと判定して止まる)。
+cd "$HOME" || exit 1
+umask 022
+
 if [[ ${TEST_CUSTOM_MISE_DIRS:-} == 1 ]]; then
   export MISE_DATA_DIR="$HOME/mise" MISE_CONFIG_DIR="$HOME/mise" MISE_CACHE_DIR="$HOME/mise/cache"
 fi

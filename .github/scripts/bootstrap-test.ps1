@@ -50,6 +50,9 @@ function Invoke-NewPwsh([string] $Command) {
     [pscustomobject]@{ Out = $out; Err = $err; Code = $code }
 }
 
+# checkout 先にいると、mise がそこの .config/mise をプロジェクトの設定として読む
+Set-Location $HOME
+
 # --- mise のインストール ---
 $v = $env:TEST_MISE_VERSION
 $zip = Join-Path $env:RUNNER_TEMP "mise.zip"
