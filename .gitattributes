@@ -1,0 +1,3 @@
+# Windows の git(core.autocrlf=true)でも LF で checkout する。CRLF になると、mise が LF で
+# 書き込む PowerShell profile の block と repo 側の内容が一致せず、毎回差分になる。
+* text=auto eol=lf
