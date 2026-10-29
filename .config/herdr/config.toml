@@ -1,0 +1,40 @@
+onboarding = false
+
+[theme]
+name = "catppuccin"
+auto_switch = false
+
+[terminal]
+default_shell = "zsh"
+
+[ui]
+agent_panel_sort = "spaces"
+
+[ui.toast]
+delivery = "system"
+
+[keys]
+# Tabs
+new_tab = ["prefix+c", "ctrl+shift+t"]
+next_tab = ["prefix+n", "ctrl+tab"]
+previous_tab = ["prefix+p", "ctrl+shift+tab"]
+switch_tab = ["prefix+1..9", "alt+1..9"]
+
+# Split
+split_horizontal = ["prefix+minus", "ctrl+shift+d"]
+split_vertical = ["prefix+v", "alt+shift+d"]
+
+# Pane focus
+focus_pane_left = ["prefix+h", "ctrl+shift+left"]
+focus_pane_down = ["prefix+j", "ctrl+shift+down"]
+focus_pane_up = ["prefix+k", "ctrl+shift+up"]
+focus_pane_right = ["prefix+l", "ctrl+shift+right"]
+
+# Pane resize
+resize_pane_left = "super+ctrl+shift+alt+left"
+resize_pane_down = "super+ctrl+shift+alt+down"
+resize_pane_up = "super+ctrl+shift+alt+up"
+resize_pane_right = "super+ctrl+shift+alt+right"
+
+# Close
+close_pane = ["prefix+x", "ctrl+shift+w"]
