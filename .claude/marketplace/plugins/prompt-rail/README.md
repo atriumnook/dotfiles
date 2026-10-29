@@ -42,8 +42,11 @@ claude plugin install prompt-rail@atnook-dotfiles
 ## 更新
 
 ```bash
-claude plugin marketplace update atnook-dotfiles   # 次のセッションか /reload-plugins で反映
+claude plugin marketplace update atnook-dotfiles
+claude plugin update prompt-rail@atnook-dotfiles   # 次のセッションか /reload-plugins で反映
 ```
+
+`plugin.json` に `version` を書いていないので、push した commit がそのまま新しい版になる。
 
 ## 開発
 
