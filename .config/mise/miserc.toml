@@ -1,0 +1,18 @@
+# このマシンで有効にする environment を、マシンの状態から決める(Tera テンプレート)。
+# mise-link.sh / mise-link.ps1 が mise の設定ディレクトリ(config_root)に link する。
+#   profile : 設定ディレクトリの profile.personal / profile.work(setup.sh が記録する)。
+#             どちらも無い、または両方ある場合は profile を選ばない
+#   OS      : os() が返す linux / windows
+#   class   : /usr/share/omarchy(omarchy package が持つ)があれば omarchy、無い Linux は wsldebian
+#   module  : omarchy 以外の機は cli、そのうち profile=personal の機は personal-cli
+# miserc.local.toml に env を書くと、ここで決めた env を丸ごと置き換える。
+{%- set personal = config_root ~ "/profile.personal" is file -%}
+{%- set work = config_root ~ "/profile.work" is file -%}
+{%- set omarchy = "/usr/share/omarchy" is dir %}
+env = [
+  {%- if personal and not work %}"personal", {% elif work and not personal %}"work", {% endif -%}
+  "{{ os() }}",
+  {%- if omarchy %} "omarchy",
+  {%- else %}{% if os() == "linux" %} "wsldebian",{% endif %} "cli",{% if personal and not work %} "personal-cli",{% endif %}
+  {%- endif %}
+]

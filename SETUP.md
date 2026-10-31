@@ -4,35 +4,26 @@
 
 ## 新しいマシンのセットアップ
 
-前提は git と mise。mise を mise.run で入れた場合、本体は `~/.local/bin` に置かれる。
+前提は git だけ。`setup.sh` / `setup.ps1` が mise を入れ(Linux は mise.run で `~/.local/bin` に、Windows は
+winget で)、repo を `~/.dotfiles` に clone し、`mise-link` を実行してから `mise bootstrap` を実行する。
+profile(`personal` / `work`)は引数で渡す。省略すると、記録済みの値を使い、無ければ端末で尋ねる
+(端末が無ければ止まる)。それ以外の引数は `mise bootstrap` にそのまま渡る(例: `--dry-run`)。
+`--dry-run` は `mise bootstrap` にだけ効き、pull・link・profile の記録は行われる。
 
 Linux / WSL:
 
 ```sh
-git clone https://github.com/atriumnook/dotfiles.git ~/.dotfiles
-~/.dotfiles/mise-link.sh   # mise の設定ディレクトリへ repo の mise 設定を link する
-d=${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}
-cp ~/.dotfiles/.config/mise/miserc.local.toml.example "$d/miserc.local.toml"
-$EDITOR "$d/miserc.local.toml"   # env を README の「environment」の表に合わせる
-mise bootstrap --dry-run   # 実行内容の確認
-mise bootstrap             # dotfiles を配置し、settings.json などを合成してから、ツールをインストールする
-mise bootstrap status      # 結果の確認
+curl -fsSL https://raw.githubusercontent.com/atriumnook/dotfiles/main/setup.sh | sh -s -- personal
 ```
 
-Windows(PowerShell。旧 chezmoi から移行するマシンでは、先に「Windows への適用」を行う):
+Windows(PowerShell。Developer Mode が必要。旧 chezmoi から移行するマシンでは、先に「Windows への適用」を行う):
 
 ```powershell
-git clone https://github.com/atriumnook/dotfiles.git "$HOME\.dotfiles"
-& "$HOME\.dotfiles\mise-link.ps1"   # Developer Mode が必要
-$d = if ($env:MISE_CONFIG_DIR) { $env:MISE_CONFIG_DIR } else { "$HOME\.config\mise" }
-Copy-Item "$HOME\.dotfiles\.config\mise\miserc.local.toml.example" "$d\miserc.local.toml"
-notepad "$d\miserc.local.toml"   # env = ["personal", "windows", "cli", "personal-cli"]
-mise bootstrap --dry-run
-mise bootstrap
-mise bootstrap status
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/atriumnook/dotfiles/main/setup.ps1))) personal
 ```
 
-`mise bootstrap` は dotfiles の適用とツールのインストール(`mise install` 相当)を1回で行う。
+結果は `mise bootstrap status` で確認する。`mise bootstrap` は dotfiles の適用とツールのインストール
+(`mise install` 相当)を1回で行う。
 設定は開始時に1度だけ読むため、`config.<env>.toml` は `[dotfiles]` ではなく `mise-link` で先に
 link しておく。`[dotfiles]` の配置先は `~/` か絶対パスに固定されるため、`MISE_CONFIG_DIR` で
 設定ディレクトリを変えている環境(コンテナなど)に合わせられない。`mise-link` はそれに従う。
@@ -60,15 +51,26 @@ omarchy 機では omarchy が Cursor CLI を入れる(公式インストーラ�
 ## 既存マシンの更新
 
 ```sh
-cd ~/.dotfiles && git pull
-./mise-link.sh             # 新しい config.<env>.toml があれば link する(Windows では .\mise-link.ps1)
-mise bootstrap --dry-run
-mise bootstrap
+~/.dotfiles/setup.sh                 # Windows では & "$HOME\.dotfiles\setup.ps1"
+~/.dotfiles/setup.sh --dry-run       # mise bootstrap の実行内容を確認する(pull と link は行われる)
 ```
 
-environment が増えたとき(例: module の `cli` / `personal-cli`)は、`git pull` の前に
-`miserc.local.toml` の `env` を README の表に合わせて更新する。`env` に入れていない environment のツールは、
-`mise bootstrap` を実行しても入らない。
+upstream のあるブランチなら fast-forward し、新しい `config.<env>.toml` を link してから `mise bootstrap` を
+実行する。environment の決め方が変わっても、マシンごとの編集は要らない。
+
+### `miserc.local.toml` から移行する(1回だけ)
+
+`miserc.local.toml` で env を宣言していたマシンでは、profile を記録してから `miserc.local.toml` を削除する。
+`miserc.local.toml` が残っていると、`miserc.toml` の決める env より優先される。
+
+```sh
+cd ~/.dotfiles && git pull
+~/.dotfiles/setup.sh personal --dry-run   # profile を記録する(仕事用のマシンは work)
+d=${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}
+before=$(mise config ls) && mv "$d/miserc.local.toml" "$d/miserc.local.toml.bak" &&
+  after=$(mise config ls) && [ "$before" = "$after" ] &&
+  rm "$d/miserc.local.toml.bak"   # 読まれる設定が同じなら削除する。違えば .bak を戻して見直す
+```
 
 ### `~/.gitconfig` を machine-local に移す(1回だけ)
 
@@ -80,7 +82,7 @@ symlink を実ファイルに置き換える。symlink のままだと、`git pu
 cp --remove-destination "$(readlink -f ~/.gitconfig)" ~/.gitconfig   # symlink を実ファイルに置き換える
 cat ~/.gitconfig.local >> ~/.gitconfig 2>/dev/null && rm ~/.gitconfig.local   # 旧 .gitconfig.local を統合する
 $EDITOR ~/.gitconfig   # このマシンの credential・user だけを残し、共通設定の節は削る
-cd ~/.dotfiles && git pull && ./mise-link.sh && mise bootstrap   # 先頭に共通設定の [include] が入る
+~/.dotfiles/setup.sh   # 先頭に共通設定の [include] が入る
 git config --show-origin --list | grep dotfiles.gitconfig   # 共通設定が読まれていることを確認する
 ```
 

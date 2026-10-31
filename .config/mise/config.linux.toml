@@ -1,4 +1,4 @@
-# OS=linux 専用の dotfiles(miserc.local.toml の env に "linux" を含めたマシンで有効)。
+# OS=linux 専用の dotfiles(miserc.toml が Linux のマシンで有効にする)。
 # 全 OS 共通分は conf.d/10-dotfiles.toml。
 [dotfiles]
 "~/.zshrc" = { mode = "symlink" }

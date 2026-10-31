@@ -59,20 +59,20 @@ $Mise = Join-Path $dist "mise\bin\mise.exe"
 $env:PATH = "$(Split-Path $Mise);$env:PATH"
 & $Mise --version
 
+# bootstrap-test.sh の同じ箇所を参照
 Copy-Item -Recurse -Force $env:GITHUB_WORKSPACE $Repo
+git -C $Repo checkout -q --detach
 
-# --- セットアップ(SETUP.md の手順) ---
-Check "mise-link.ps1" { & (Join-Path $Repo "mise-link.ps1") | Out-Host; $? }
-$MiseConfig = if ($env:MISE_CONFIG_DIR) { $env:MISE_CONFIG_DIR } else { Join-Path $HOME ".config\mise" }
-Set-Content (Join-Path $MiseConfig "miserc.local.toml") "env = $env:TEST_MISE_ENV"
-Check "mise bootstrap" { Invoke-Mise bootstrap -y }
+# --- セットアップ(SETUP.md の手順。mise は上で入れたため setup.ps1 は winget を使わない) ---
+Check "setup.ps1" { & (Join-Path $Repo "setup.ps1") $env:TEST_PROFILE -y | Out-Host; $? }
 
 # --- 検証 ---
 # bootstrap-test.sh の同じ箇所を参照
 Check "environment 別の設定が読まれている" {
-    $out = & $Mise config ls 2>&1 | Out-String
-    $out
-    $out -match "config\.cli\.toml"
+    $got = (& $Mise config ls 2>&1 | Select-String -AllMatches "config\.([a-z-]+)\.toml" |
+        ForEach-Object { $_.Matches } | ForEach-Object { $_.Groups[1].Value } | Sort-Object) -join " "
+    "loaded: $got"
+    $got -ceq "cli personal personal-cli windows"
 }
 Check "設定どおりに収束している(bootstrap status --missing)" { Invoke-Mise bootstrap status --missing }
 

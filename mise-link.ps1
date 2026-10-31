@@ -7,6 +7,8 @@ $Dir = if ($env:MISE_CONFIG_DIR) { $env:MISE_CONFIG_DIR } else { Join-Path $HOME
 New-Item -ItemType Directory -Force (Join-Path $Dir "conf.d") | Out-Null
 New-Item -ItemType SymbolicLink -Force -Path (Join-Path $Dir "conf.d\10-dotfiles.toml") `
     -Target (Join-Path $Repo ".config\mise\conf.d\10-dotfiles.toml") | Out-Null
+New-Item -ItemType SymbolicLink -Force -Path (Join-Path $Dir "miserc.toml") `
+    -Target (Join-Path $Repo ".config\mise\miserc.toml") | Out-Null
 Get-ChildItem (Join-Path $Repo ".config\mise\config.*.toml") | ForEach-Object {
     New-Item -ItemType SymbolicLink -Force -Path (Join-Path $Dir $_.Name) -Target $_.FullName | Out-Null
 }

@@ -4,8 +4,8 @@
 # usage: bootstrap-test.sh
 #
 # 環境変数:
-#   TEST_MISE_VERSION     インストールする mise のバージョン
-#   TEST_MISE_ENV         miserc.local.toml に書く env(TOML の配列)
+#   TEST_MISE_VERSION     インストールする mise のバージョン(setup.sh が mise.run で入れる)
+#   TEST_PROFILE          setup.sh に渡す profile
 #   TEST_CUSTOM_MISE_DIRS 1 なら mise の公式 Docker イメージと同じく MISE_*_DIR を1か所にまとめる
 #   GITHUB_WORKSPACE      checkout 済みの repo
 #
@@ -75,12 +75,13 @@ second_run_noop() {
   ! grep -E '^mise (files|edits): (applied|created|removed)' <<<"$out"
 }
 
-# 設定が1つも読まれていなくても bootstrap status は収束と判定するため、env 別の設定まで読まれたかを見る
+# 設定が1つも読まれていなくても bootstrap status は収束と判定するため、env 別の設定まで読まれたかを見る。
+# omarchy 以外の Linux 機で profile=personal のときに miserc.toml が決める env と一致すること
 env_config_loaded() {
-  local out
-  out=$("$mise" config ls 2>&1)
-  printf '%s\n' "$out"
-  grep -q 'config\.cli\.toml' <<<"$out"
+  local got
+  got=$("$mise" config ls 2>&1 | grep -oE 'config\.[a-z-]+\.toml' | sed -E 's/^config\.(.*)\.toml$/\1/' | sort | xargs)
+  echo "loaded: $got"
+  [[ $got == "cli linux personal personal-cli wsldebian" ]]
 }
 
 repo_clean() {
@@ -90,21 +91,14 @@ repo_clean() {
   [[ -z $out ]]
 }
 
-# --- mise のインストール(mise.run と同じく ~/.local/bin に置く) ---
-tmp=$(mktemp -d)
-mkdir -p "$HOME/.local/bin"
-curl -fsSL "https://github.com/jdx/mise/releases/download/v${TEST_MISE_VERSION}/mise-v${TEST_MISE_VERSION}-linux-x64.tar.gz" |
-  tar xz -C "$tmp"
-install "$tmp/mise/bin/mise" "$mise"
-"$mise" --version
-
-# checkout 先は所有者が違うことがあり、git が dubious ownership で拒否するため、所有者ごとコピーし直す
+# checkout 先は所有者が違うことがあり、git が dubious ownership で拒否するため、所有者ごとコピーし直す。
+# setup.sh が upstream から pull して検証対象の commit から動かないよう、HEAD を切り離す
 cp -R "$GITHUB_WORKSPACE" "$repo"
+git -C "$repo" checkout -q --detach
 
-# --- セットアップ(SETUP.md の手順) ---
-check "mise-link.sh" "$repo/mise-link.sh"
-printf 'env = %s\n' "$TEST_MISE_ENV" >"${MISE_CONFIG_DIR:-$HOME/.config/mise}/miserc.local.toml"
-check "mise bootstrap" "$mise" bootstrap -y
+# --- セットアップ(SETUP.md の手順。mise のインストールも setup.sh が行う) ---
+check "setup.sh" env MISE_VERSION="v$TEST_MISE_VERSION" "$repo/setup.sh" "$TEST_PROFILE" -y
+"$mise" --version
 
 # --- 検証 ---
 check "environment 別の設定が読まれている" env_config_loaded
