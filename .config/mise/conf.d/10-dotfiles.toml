@@ -4,8 +4,8 @@
 # ~/.config/mise/config.toml は omarchy の mise ラッパー(`mise use -g`)や手動の
 # `mise use -g` が書き込む machine-local ファイルなので、ここでは管理しない。
 #
-# 有効化する environment は各マシンの ~/.config/mise/miserc.local.toml で宣言する:
-#   profile : personal / work
+# 有効化する environment は miserc.toml がマシンの状態から決める:
+#   profile : personal / work(setup.sh が記録する)
 #   OS      : linux / windows
 #   class   : omarchy / wsldebian
 #   module  : cli / personal-cli(omarchy 以外の機で、omarchy が提供するツールを mise で補う)

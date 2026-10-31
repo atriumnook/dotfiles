@@ -11,7 +11,9 @@ chezmoi から `mise bootstrap` へ移行した dotfiles。リポジトリ直下
 |---|---|
 | `.config/mise/conf.d/10-dotfiles.toml` | 全 OS 共通の設定(`[settings]` / `[tools]` / `[dotfiles]`) |
 | `.config/mise/config.<env>.toml` | environment 別の上乗せ(下表) |
-| `mise-link.sh` / `mise-link.ps1` | 上の2つを mise の設定ディレクトリ(`MISE_CONFIG_DIR`、既定は `~/.config/mise`)に link する |
+| `.config/mise/miserc.toml` | マシンの状態から、有効にする environment を決める |
+| `mise-link.sh` / `mise-link.ps1` | 上の3つを mise の設定ディレクトリ(`MISE_CONFIG_DIR`、既定は `~/.config/mise`)に link する |
+| `setup.sh` / `setup.ps1` | mise の導入、clone、`mise-link`、profile の記録、`mise bootstrap` をまとめて行う |
 | `Documents/PowerShell/conf.d/*.ps1` | Windows の PowerShell 設定(copy で配置) |
 | `.github/` | 素の環境で `mise bootstrap` を検証する CI(`$HOME` には配置しない) |
 | 上記以外 | `$HOME` 相対のファイル本体 |
@@ -26,21 +28,19 @@ git は後に書いた値を優先するので、`~/.gitconfig` に書いた値�
 
 ## environment
 
-mise の設定ディレクトリ(既定は `~/.config/mise`)の `miserc.local.toml` で有効化する environment を宣言する
-(マシン固有のため repo には置かない)。
-mise は `miserc.local.toml` を `miserc.toml` より優先して読み、マシン固有の選択には `.local` を使うのが公式の推奨
-([miserc locations](https://mise.jdx.dev/configuration.html#miserc-locations))。
-環境変数 `MISE_ENV` や `-E` はすべての miserc より優先されるため、miserc を変更したら
-`MISE_ENV` を引き継いだ端末・マルチプレクサのセッションを開き直す。
+有効にする environment は、`miserc.toml`([miserc](https://mise.jdx.dev/configuration.html#miserc-locations))が
+マシンの状態から決める。人が決めるのは profile だけで、`setup.sh` が mise の設定ディレクトリに
+`profile.personal` か `profile.work` として記録する。
 
-| 軸 | 値 | 効果 |
-|---|---|---|
-| profile | `personal` / `work` | 個人用ツールの有無(`config.personal.toml`) |
-| OS | `linux` / `windows` | OS 別の dotfiles(`config.linux.toml` / `config.windows.toml`) |
-| class | `omarchy` / `wsldebian` | Linux のマシンクラス別ツール・nvim 設定 |
-| module | `cli` / `personal-cli` | omarchy 以外のマシンで、omarchy が提供するツールを補う。`cli` は omarchy 以外の全マシン、`personal-cli` はそのうち profile が `personal` のマシンが選ぶ |
+| 軸 | 値 | 決め方 | 効果 |
+|---|---|---|---|
+| profile | `personal` / `work` | 記録した profile(どちらも無い、または両方あるときは選ばない) | 個人用ツールの有無(`config.personal.toml`) |
+| OS | `linux` / `windows` | mise の `os()` | OS 別の dotfiles(`config.linux.toml` / `config.windows.toml`) |
+| class | `omarchy` / `wsldebian` | `/usr/share/omarchy`(omarchy package が持つ)があれば `omarchy`、無い Linux は `wsldebian` | Linux のマシンクラス別ツール・nvim 設定 |
+| module | `cli` / `personal-cli` | omarchy 以外の全マシンが `cli`、そのうち profile が `personal` のマシンが `personal-cli` | omarchy が提供するツールを補う |
 
-マシンごとの `env` は次のとおり。
+その結果、マシンごとの `env` は次のとおりになる(Linux の行は `.github/scripts/env-test.sh`、Windows の行は
+`.github/scripts/bootstrap-test.ps1` が検証する)。
 
 | マシン | env |
 |---|---|
@@ -49,7 +49,9 @@ mise は `miserc.local.toml` を `miserc.toml` より優先して読み、マシ
 | 仕事 WSL / Debian | `["work", "linux", "wsldebian", "cli"]` |
 | 個人 Windows | `["personal", "windows", "cli", "personal-cli"]` |
 
-`env` を宣言していないマシンでは共通設定だけが読まれ、environment 別のツールと dotfiles は入らない。
+`miserc.local.toml` に `env` を書くと、`miserc.toml` が決めた `env` を丸ごと置き換える(一時的な上書き用で、
+repo には置かない)。環境変数 `MISE_ENV` や `-E` はすべての miserc より優先されるため、`MISE_ENV` を
+引き継いだ端末・マルチプレクサのセッションでは、profile を変えたら開き直す。
 
 ## settings.json の扱い
 

@@ -10,6 +10,7 @@ dir=${MISE_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/mise}
 
 mkdir -p "$dir/conf.d"
 ln -sf "$repo/.config/mise/conf.d/10-dotfiles.toml" "$dir/conf.d/10-dotfiles.toml"
+ln -sf "$repo/.config/mise/miserc.toml" "$dir/miserc.toml"
 for f in "$repo"/.config/mise/config.*.toml; do
   ln -sf "$f" "$dir/$(basename "$f")"
 done

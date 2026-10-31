@@ -21,6 +21,27 @@ env:
   GITHUB_TOKEN: ${{ github.token }}
 
 jobs:
+  # miserc.toml が決める environment を、omarchy 以外の機と omarchy 機(/usr/share/omarchy を作って再現)で検証する
+  env:
+    name: env (${{ matrix.machine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        machine: [non-omarchy, omarchy]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install mise
+        run: curl -fsSL https://mise.run | MISE_VERSION="v$TEST_MISE_VERSION" sh
+      - name: Pretend to be omarchy
+        if: matrix.machine == 'omarchy'
+        run: sudo mkdir -p /usr/share/omarchy
+      - name: Verify environments
+        run: PATH="$HOME/.local/bin:$PATH" .github/scripts/env-test.sh
+
   linux:
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
@@ -41,7 +62,7 @@ jobs:
             custom_mise_dirs: "1"
     env:
       TEST_TARGET: ${{ matrix.target }}
-      TEST_MISE_ENV: '["personal", "linux", "wsldebian", "cli", "personal-cli"]'
+      TEST_PROFILE: personal
       TEST_CUSTOM_MISE_DIRS: ${{ matrix.custom_mise_dirs }}
     steps:
       # actions/checkout は git が無いと .git を作らないため、先に入れる
@@ -65,7 +86,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 40
     env:
-      TEST_MISE_ENV: '["personal", "windows", "cli", "personal-cli"]'
+      TEST_PROFILE: personal
     steps:
       - uses: actions/checkout@v4
         with:
