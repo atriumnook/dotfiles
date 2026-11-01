@@ -1,33 +1,23 @@
-import type { EngineInterface, Register, Timer } from 'claude-code'
+import type { EngineInterface, Register, RenderElement, RenderInput } from 'claude-code'
 import { cleanText, indexRows, isPromptText, parseLine, type Row, type TranscriptIndex, type Turn } from './transcript.ts'
-import {
-  ICON,
-  RAIL_INSET,
-  TICK_GAP,
-  tickGlyph,
-  cardLeft,
-  cardWidth,
-  cellWidth,
-  chooseLayout,
-  fit,
-  headlineParts,
-  railWindow,
-  turnLine,
-} from './layout.ts'
+import { ICON, cardTop, cardWidth, cellWidth, fit, tickRows, turnLine, wrap } from './layout.ts'
 
-// 帯を描き直すためだけのカウンタ。描画中に読み、変化を書くと帯だけが描き直される
-const MOVED = { plugin: 'prompt-rail', key: 'moved' } as const
+// このセッションのトランスクリプトのパス。hot reload 後の session.start はパスを持たないため
+const TRANSCRIPT = { plugin: 'prompt-rail', key: 'transcript' } as const
 // 本人が送った行(端末の入力欄・Remote Control・SDK)
 const PROMPT_KINDS = new Set(['composer', 'bridge', 'sdk'])
 // 保存前のプロンプト行が一時的に描かれる id
 const PROVISIONAL_ID = 'placeholder'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-// `transcript:<session id>` → トランスクリプトのパス。hot reload 後の session.start はパスを持たないため
-const TRANSCRIPT_KEY = 'transcript:'
-const KEPT_TRANSCRIPTS = 20
-// 画面上の位置の報告が落ち着いてから描き直す。スクロール中も最長 SETTLE_MAX_MS で一度は描く
-const SETTLE_MS = 40
-const SETTLE_MAX_MS = 120
+// 描かれていない行へは、描かれた一番古い行への scroll を繰り返して近づく。その回数と、1回ごとに待つ上限
+const MAX_HOPS = 400
+const HOP_WAIT_MS = 300
+const POLL_MS = 16
+// カードに載せる本文の行数と、まとめた行のカードに並べるプロンプトの数
+const CARD_TEXT_LINES = 4
+const CARD_LIST_MAX = 8
+// 同じトランスクリプト行から描かれた行の、画面での上下(順番が同じ行どうしで比べる)
+const COMPONENT_RANK: Record<string, number> = { UserMessage: 0, AssistantMessage: 1, ToolUse: 2, ToolGroup: 2, ToolResult: 3 }
 
 const encoder = new TextEncoder()
 
@@ -36,6 +26,8 @@ const encoder = new TextEncoder()
 export const rowKey = (id: string) => (UUID.test(id) ? id.slice(0, 24) : id)
 
 type Entry = { id: string; text: string; turn?: Turn }
+// 見えている行。first・last・of は onScreen の値(行の先頭の空行を 0 行目と数える)
+type Seen = { key: string; first: number; last: number; of: number }
 
 // セッション中に保つ状態。module を読み込み直すと作り直される
 type Rail = {
@@ -45,28 +37,38 @@ type Rail = {
   list: Entry[]
   byKey: Map<string, number>
   ownerByKey: Map<string, number>
-  knownKeys: Set<string>
+  orderByKey: Map<string, number>
   reader: { path: string; offset: number; rows: Row[] }
   isReading: boolean
   isReadAgain: boolean
-  // プロンプト行が最後に描かれた id(ジャンプ先)
+  // 行のキー → 最後に描かれた requestId(ジャンプ先と、ジャンプが伝う行)
   drawn: Map<string, string>
-  // 画面に見えている行(コンポーネントと id)→ 行のキー。見えなくなった行は報告で消える
-  screen: Map<string, string>
+  // 見えている行(コンポーネントと requestId)。見えなくなった行は報告で消える
+  screen: Map<string, Seen>
+  // 描かれた順。トランスクリプトにまだ無い行の上下に使う
+  seen: Map<string, number>
+  // 見えている行のうち一番上。まとめた行を押したときの次の移動先を決める
+  top: string | undefined
+  // 右端の列を描く行: 見えている行のうち一番下。どの行よりも後に描かれるので、列とカードが塗られない
+  bottom: string | undefined
+  // transcript の viewport の行数。最後に測れた値
+  height: number
   // 読んでいるプロンプトのキー。見えている行が無い間は保つ
   reading: string | undefined
-  drawnCurrent: number
-  settle: { quiet?: Timer; latest?: Timer }
+  // 移動中のジャンプ。seq が変わったら、前のジャンプはやめる
+  seeking: { key: string; seq: number } | undefined
+  jumps: number
+  // 最後に描き直させたときの列の内容。変わったら描き直させる
+  drawnLook: string
+  isRedrawPending: boolean
   // 表示中のトランスクリプトがサブエージェントのものなら、その id
   viewAgent: string | undefined
   isRunning: boolean
   // turn_duration 行が書かれる前に、エンジンが報告したターンの所要時間
   reported: Map<string, number>
-  // 行が描かれていないため移動できなかったプロンプトのキー。その行が描かれたら外す
-  unreachable: Set<string>
 }
 
-const emptyIndex = (): TranscriptIndex => ({ prompts: [], owners: new Map(), known: new Set() })
+const emptyIndex = (): TranscriptIndex => ({ prompts: [], owners: new Map(), order: new Map() })
 
 export const newRail = (): Rail => ({
   index: emptyIndex(),
@@ -74,69 +76,108 @@ export const newRail = (): Rail => ({
   list: [],
   byKey: new Map(),
   ownerByKey: new Map(),
-  knownKeys: new Set(),
+  orderByKey: new Map(),
   reader: { path: '', offset: 0, rows: [] },
   isReading: false,
   isReadAgain: false,
   drawn: new Map(),
   screen: new Map(),
+  seen: new Map(),
+  top: undefined,
+  bottom: undefined,
+  height: 0,
   reading: undefined,
-  drawnCurrent: -1,
-  settle: {},
+  seeking: undefined,
+  jumps: 0,
+  drawnLook: '',
+  isRedrawPending: false,
   viewAgent: undefined,
   isRunning: false,
   reported: new Map(),
-  unreachable: new Set(),
 })
 
 function rebuild(rail: Rail) {
   rail.list = [...rail.index.prompts, ...rail.extras]
   rail.byKey = new Map(rail.list.map((entry, i) => [rowKey(entry.id), i]))
   rail.ownerByKey = new Map([...rail.index.owners].map(([id, i]) => [rowKey(id), i]))
-  rail.knownKeys = new Set([...rail.index.known].map(rowKey))
+  rail.orderByKey = new Map([...rail.index.order].map(([id, i]) => [rowKey(id), i]))
 }
 
 export function applyIndex(rail: Rail, index: TranscriptIndex) {
   rail.index = index
-  const known = new Set([...index.known].map(rowKey))
+  const known = new Set([...index.order.keys()].map(rowKey))
   // 保存された行は索引から載せる。同じ文面が最近保存されていれば、それも同じプロンプトとみなす
   const recent = new Set(index.prompts.slice(-(rail.extras.length + 2)).map(prompt => prompt.text))
   rail.extras = rail.extras.filter(entry => !known.has(rowKey(entry.id)) && !recent.has(entry.text))
   rebuild(rail)
 }
 
-// 描かれたプロンプト行を記録する。まだ一覧に無ければ載せ、変わったら true
+// 描かれたプロンプト行を記録する。まだ一覧に無ければ載せる
 export function noteDrawn(rail: Rail, id: string, text: string) {
   const key = rowKey(id)
   rail.drawn.set(key, id)
-  const wasUnreachable = rail.unreachable.delete(key)
-  if (rail.byKey.has(key) || rail.knownKeys.has(key)) return wasUnreachable
+  if (rail.byKey.has(key) || rail.orderByKey.has(key)) return
   rail.extras = [...rail.extras, { id, text }]
   rebuild(rail)
-  return true
 }
 
-function resetRail(rail: Rail) {
-  Object.assign(rail, newRail())
+// まとめて畳まれたツール群は、最初の呼び出しの位置にある。呼び出しの無い思考だけの群は
+// `collapsed-<最初の行の uuid>` の行にある
+export const groupKey = (calls: ReadonlyArray<{ tool_use_id?: string }>, requestId: string) =>
+  rowKey(calls.find(call => call.tool_use_id)?.tool_use_id ?? requestId.replace(/^collapsed-/, ''))
+
+const indexOfKey = (rail: Rail, key: string) => rail.byKey.get(key) ?? rail.ownerByKey.get(key)
+
+// 画面での上下を比べる値。トランスクリプトの順番、同じ行から描かれたものはコンポーネント、
+// トランスクリプトにまだ無い行は描かれた順。ロゴの下の InfoNotice はどの行よりも上
+function place(rail: Rail, name: string, key: string): [number, number, number] {
+  const component = name.slice(0, name.indexOf('\u0000'))
+  const order = component === 'InfoNotice' ? -1 : (rail.orderByKey.get(key) ?? Number.MAX_SAFE_INTEGER)
+  return [order, COMPONENT_RANK[component] ?? 4, rail.seen.get(name) ?? 0]
 }
 
-const indexOfKey = (rail: Rail, key: string) => rail.byKey.get(key) ?? rail.ownerByKey.get(key) ?? rail.list.length - 1
+const before = (a: [number, number, number], b: [number, number, number]) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
+
+// 見えている行を上から順に並べる
+export function screenOrder(rail: Rail) {
+  return [...rail.screen].map(([name, seen]) => ({ name, seen, at: place(rail, name, seen.key) })).sort((a, b) => before(a.at, b.at))
+}
+
+// 見えている行から、列を描く行と transcript の viewport の行数を求める
+export function measure(rail: Rail) {
+  const rows = screenOrder(rail)
+  const first = rows[0]
+  rail.top = first?.name
+  rail.bottom = rows.at(-1)?.name
+  if (!first) return
+  const last = rows.at(-1)!
+  rail.height =
+    rows.length === 1
+      ? first.seen.last - first.seen.first + 1
+      : first.seen.of - first.seen.first + rows.slice(1, -1).reduce((sum, row) => sum + row.seen.of, 0) + last.seen.last + 1
+}
 
 // 読んでいる位置: 画面にプロンプトの行が見えていれば、そのうち一番古いもの。
 // 見えていなければ、見えている応答やツールの行のうち一番古いプロンプトに属するもの
 export function currentIndex(rail: Rail) {
   let prompt = -1
   let any = -1
-  for (const [name, key] of rail.screen) {
+  for (const [name, { key }] of rail.screen) {
     const i = indexOfKey(rail, key)
-    if (i < 0) continue
+    if (i === undefined) continue
     if (any < 0 || i < any) any = i
-    if (name.startsWith('UserMessage\u0000') && (prompt < 0 || i < prompt)) prompt = i
+    if (name.startsWith('UserMessage\u0000') && rail.byKey.has(key) && (prompt < 0 || i < prompt)) prompt = i
   }
   const best = prompt >= 0 ? prompt : any
   if (best >= 0) rail.reading = rowKey(rail.list[best]!.id)
   const i = rail.reading === undefined ? -1 : (rail.byKey.get(rail.reading) ?? -1)
   return i >= 0 ? i : rail.list.length - 1
+}
+
+// 見えている範囲: 見えている行が属するプロンプトの、最初から最後まで
+export function visibleRange(rail: Rail) {
+  const found = [...rail.screen.values()].map(({ key }) => indexOfKey(rail, key)).filter((i): i is number => i !== undefined)
+  return found.length === 0 ? undefined : { from: Math.min(...found), to: Math.max(...found) }
 }
 
 function turnOf(rail: Rail, i: number) {
@@ -148,14 +189,25 @@ function turnOf(rail: Rail, i: number) {
   return turnLine({ tools: 0, files: [], ...entry.turn, durationMs: ms }, isRunning)
 }
 
-async function redraw($: EngineInterface) {
-  const { value = 0 } = await $.state.get(MOVED)
-  await $.state.set(MOVED, value + 1)
+// 列の見た目を決める値。前に描いたものと違えば描き直させる
+function look(rail: Rail) {
+  const range = visibleRange(rail)
+  return [rail.bottom, rail.height, rail.list.length, currentIndex(rail), range?.from, range?.to, rail.seeking?.key, rail.isRunning].join('|')
 }
 
-// 描画フックの中では state を書けないので、そのディスパッチが終わってから描き直す
-function redrawLater($: EngineInterface) {
-  $.clock.after(0, () => void redraw($))
+// 描画フックの中では描き直しを頼めないので、そのディスパッチが終わってから頼む
+function redrawIfChanged($: EngineInterface, rail: Rail) {
+  if (rail.isRedrawPending || look(rail) === rail.drawnLook) return
+  rail.isRedrawPending = true
+  $.clock.after(0, () => {
+    rail.isRedrawPending = false
+    if (look(rail) !== rail.drawnLook) redraw($, rail)
+  })
+}
+
+function redraw($: EngineInterface, rail: Rail) {
+  rail.drawnLook = look(rail)
+  $.ui.invalidate('ui.render')
 }
 
 // 前回読んだ位置から先だけを読む。$.fs.read は 4 MiB までなので、長いセッションは tail で流し読む
@@ -204,7 +256,8 @@ async function readTranscript($: EngineInterface, rail: Rail, path: string) {
         await readWhole($, reader)
       }
       applyIndex(rail, indexRows(reader.rows))
-      await redraw($)
+      measure(rail)
+      redraw($, rail)
     } while (rail.isReadAgain)
   } catch {
     // セッション開始直後でファイルがまだ無いなど。次のイベントで読み直す
@@ -213,73 +266,194 @@ async function readTranscript($: EngineInterface, rail: Rail, path: string) {
   }
 }
 
-async function rememberTranscript($: EngineInterface, sessionId: string, path: string) {
-  await $.store.set(`${TRANSCRIPT_KEY}${sessionId}`, { path, at: Date.now() })
-  const keys = (await $.store.keys()).filter(key => key.startsWith(TRANSCRIPT_KEY))
-  if (keys.length <= KEPT_TRANSCRIPTS) return
-  const dated = await Promise.all(
-    keys.map(async key => {
-      const value = (await $.store.get(key)) as { at?: unknown } | undefined
-      return { key, at: typeof value?.at === 'number' ? value.at : 0 }
-    }),
-  )
-  dated.sort((a, b) => b.at - a.at)
-  await Promise.all(dated.slice(KEPT_TRANSCRIPTS).map(({ key }) => $.store.delete(key)))
-}
-
-function report($: EngineInterface, rail: Rail, component: string, id: string, onScreen: unknown) {
-  if (onScreen === undefined || rail.viewAgent !== undefined) return
-  const name = `${component}\u0000${id}`
+// 行の画面上の位置の報告を記録する。onScreen が undefined の描画は位置を持たない
+export function report(rail: Rail, name: string, key: string, onScreen: { first: number; last: number; of: number } | null | undefined) {
+  if (!rail.seen.has(name)) rail.seen.set(name, rail.seen.size)
+  if (onScreen === undefined) return
   if (onScreen === null) rail.screen.delete(name)
-  else rail.screen.set(name, rowKey(id))
-  const fire = () => {
-    rail.settle.quiet?.cancel()
-    rail.settle.latest?.cancel()
-    rail.settle = {}
-    if (currentIndex(rail) !== rail.drawnCurrent) void redraw($)
+  else rail.screen.set(name, { key, first: onScreen.first, last: onScreen.last, of: onScreen.of })
+  measure(rail)
+}
+
+// ジャンプで画面外に出た行は、出たと報告しないことがある。着地した行より上の行は消す
+export function landOn(rail: Rail, requestId: string) {
+  const name = `UserMessage\u0000${requestId}`
+  const target = place(rail, name, rowKey(requestId))
+  for (const [other, seen] of rail.screen) if (before(place(rail, other, seen.key), target) < 0) rail.screen.delete(other)
+  const kept = rail.screen.get(name)
+  rail.screen.set(name, { key: rowKey(requestId), first: 0, last: kept?.last ?? 0, of: kept?.of ?? 1 })
+  rail.reading = rowKey(requestId)
+  rail.top = name
+}
+
+// 押した行のプロンプトのうち、上端にあるものの次。上端に無ければ行の最初のプロンプト
+export function nextTarget(rail: Rail, prompts: readonly number[]) {
+  const top = rail.top === undefined ? undefined : rail.screen.get(rail.top)?.key
+  const keys = prompts.map(i => rowKey(rail.list[i]!.id))
+  const at = keys.findIndex(key => key === top)
+  return prompts[(at + 1) % prompts.length]!
+}
+
+// 描かれた行のうち、トランスクリプトで一番前のもの
+function oldestDrawn(rail: Rail) {
+  let best: { id: string; order: number } | undefined
+  for (const [key, id] of rail.drawn) {
+    const order = rail.orderByKey.get(key)
+    if (order !== undefined && (!best || order < best.order)) best = { id, order }
   }
-  rail.settle.quiet?.cancel()
-  rail.settle.quiet = $.clock.after(SETTLE_MS, fire)
-  rail.settle.latest ??= $.clock.after(SETTLE_MAX_MS, fire)
+  return best?.id
 }
 
-// ジャンプで画面外に出た行は、出たと報告しないことがある。着地した行だけが見えているとみなす
-export function landOn(rail: Rail, target: string) {
-  rail.screen.clear()
-  rail.screen.set(`UserMessage\u0000${target}`, rowKey(target))
-  rail.reading = rowKey(target)
+function wait($: EngineInterface, ms: number) {
+  return new Promise<void>(resolve => void $.clock.after(ms, () => resolve()))
 }
 
-// 移動を断られたときに伝える文。行が描かれていない断りなら、その tick に目印を付ける
-const NOT_DRAWN = /nothing drawn/
-export function refusalNotice(rail: Rail, key: string, deny: string) {
-  if (!NOT_DRAWN.test(deny)) return deny
-  rail.unreachable.add(key)
-  return 'このプロンプトの行はまだ画面に描かれていないため、移動できません'
+async function seek($: EngineInterface, rail: Rail, key: string, seq: number) {
+  for (let hop = 0; hop < MAX_HOPS && rail.seeking?.seq === seq; hop++) {
+    const drawn = rail.drawn.get(key)
+    if (drawn) {
+      const result = await $.ui.scroll({ to: { requestId: drawn }, block: 'start' })
+      return { ...result, requestId: drawn }
+    }
+    const oldest = oldestDrawn(rail)
+    if (!oldest) break
+    const count = rail.drawn.size
+    const result = await $.ui.scroll({ to: { requestId: oldest }, block: 'start' })
+    if (result.deny) return result
+    // 上の行が描かれるまで待つ
+    for (let ms = 0; rail.drawn.size === count && ms < HOP_WAIT_MS; ms += POLL_MS) await wait($, POLL_MS)
+  }
+  return { deny: rail.seeking?.seq === seq ? 'too far' : undefined, requestId: undefined }
 }
 
-async function jump($: EngineInterface, rail: Rail, i: number) {
-  const entry = rail.list[i]
-  if (!entry) return
+async function press($: EngineInterface, rail: Rail, prompts: readonly number[]) {
   if (rail.viewAgent !== undefined) {
     $.ui.toast('jumps move through the main conversation; switch back to it first')
     return
   }
-  const key = rowKey(entry.id)
-  const target = rail.drawn.get(key) ?? entry.id
+  const i = nextTarget(rail, prompts)
+  const key = rowKey(rail.list[i]!.id)
+  const seq = ++rail.jumps
+  rail.seeking = { key, seq }
+  redraw($, rail)
+  let result: { deny?: string; requestId?: string }
   try {
-    const result = await $.ui.scroll({ to: { requestId: target }, block: 'start' })
-    if (result.deny) {
-      $.ui.toast(refusalNotice(rail, key, result.deny))
-      await redraw($)
-      return
-    }
+    result = await seek($, rail, key, seq)
   } catch (err) {
-    $.ui.toast((err as Error).message)
-    return
+    result = { deny: (err as Error).message }
   }
-  landOn(rail, target)
-  await redraw($)
+  // 別の tick が押された
+  if (rail.seeking?.seq !== seq) return
+  rail.seeking = undefined
+  // 人が scroll した。その操作を優先し、伝えない
+  if (result.deny && !/moved meanwhile/.test(result.deny)) $.ui.toast(`${i + 1} へジャンプできません: ${result.deny}`)
+  if (!result.deny && result.requestId) landOn(rail, result.requestId)
+  redraw($, rail)
+}
+
+// 見えている行のうち一番下の行だけが、自分の描画に右端の列を重ねる
+function drawColumn($: EngineInterface, rail: Rail, e: RenderInput, own: RenderElement): RenderElement {
+  const name = `${e.component}\u0000${e.requestId}`
+  const seen = rail.screen.get(name)
+  if (e.surface !== 'terminal' || !e.viewport || e.viewport.isFullscreen !== true || rail.viewAgent !== undefined) return own
+  if (name !== rail.bottom || !seen || rail.list.length === 0) return own
+  const { Box, Text, Button } = $.ui.resolve(e)
+  const columns = e.viewport.columns
+  // viewport が画面全体より高いことはない。報告が古いときの上限
+  const height = Math.min(rail.height, e.viewport.rows)
+  // 最後の行は、上へスクロールしている間エンジンの「Jump to bottom」が pointer を取るので空ける
+  const rows = Math.max(1, height - 1)
+  const placed = tickRows(rail.list.length, rows)
+  const reading = currentIndex(rail)
+  const range = visibleRange(rail)
+  const cw = cardWidth(columns)
+  // この行の last 行目が viewport の下端で、上端はそこから height - 1 行上。sticky header が
+  // 覆う行は onScreen が見えている行に数えないので、上端は header のすぐ下になる
+  const base = seen.last - (height - 1)
+
+  type Seg = { text: string; dim?: boolean; bold?: boolean; color?: string; bg?: string }
+  const drawLine = (segs: Seg[]) => (
+    <Box height={1} flexDirection="row">
+      {segs.map(seg => (
+        <Text dimColor={seg.dim} weight={seg.bold ? 'semibold' : undefined} color={seg.color} backgroundColor={seg.bg} wrap="truncate-end">
+          {seg.text}
+        </Text>
+      ))}
+    </Box>
+  )
+  const pill = (i: number): Seg[] => [
+    { text: ICON.pillStart, color: 'suggestion' },
+    { text: ` ${i + 1} `, color: 'inverseText', bg: 'suggestion', bold: true },
+    { text: ICON.pillEnd, color: 'suggestion' },
+  ]
+  const pillWidth = (i: number) => cellWidth(` ${i + 1} `) + 2
+  // カード: 控えめな枠の中に、番号のピルと本文、ターンの要約。transcript の上に重ねるので、幅いっぱいを塗る
+  const cardLines = (prompts: readonly number[]): Seg[][] => {
+    const inner = cw - 4
+    const side = (segs: Seg[]): Seg[] => [{ text: '│ ', dim: true }, ...segs, { text: ' │', dim: true }]
+    const body: Seg[][] = []
+    if (prompts.length === 1) {
+      const i = prompts[0]!
+      const indent = pillWidth(i) + 1
+      wrap(rail.list[i]!.text, inner - indent, CARD_TEXT_LINES).forEach((line, k) =>
+        body.push(k === 0 ? [...pill(i), { text: ' ' }, { text: line, bold: true }] : [{ text: ' '.repeat(indent) }, { text: line }]),
+      )
+      body.push([{ text: ' '.repeat(indent) }, { text: fit(turnOf(rail, i), inner - indent), dim: true }])
+    } else {
+      for (const i of prompts.slice(0, CARD_LIST_MAX)) body.push([...pill(i), { text: ' ' }, { text: fit(rail.list[i]!.text, inner - pillWidth(i) - 1) }])
+      const rest = prompts.length - CARD_LIST_MAX
+      if (rest > 0) body.push([{ text: fit(`+${rest}`, inner), dim: true }])
+    }
+    return [[{ text: `╭${'─'.repeat(cw - 2)}╮`, dim: true }], ...body.map(side), [{ text: `╰${'─'.repeat(cw - 2)}╯`, dim: true }]]
+  }
+
+  const ticks = placed.flatMap((prompts, row) => {
+    if (prompts.length === 0) return []
+    const scope = `prompt-rail-${row}`
+    const isSeeking = rail.seeking !== undefined && prompts.some(i => rowKey(rail.list[i]!.id) === rail.seeking!.key)
+    const isReading = prompts.includes(reading)
+    const isInRange = range !== undefined && prompts.some(i => i >= range.from && i <= range.to)
+    const color = isSeeking ? 'warning' : isInRange ? 'claude' : 'subtle'
+    const lines = cardLines(prompts)
+    return [
+      // Button の label の Text は group を heat できないので、外側の Box で heat する
+      <Box key={scope} position="absolute" top={base + row} left={columns - 1} hover={{ scope }}>
+        <Button key={`jump-${row}`} plain onPress={() => void press($, rail, prompts)}>
+          <Text color={color} weight={isSeeking || isReading ? 'semibold' : undefined} hover={{ scope, color: 'suggestion', bold: true }}>
+            {prompts.length > 1 ? '=' : '-'}
+          </Text>
+        </Button>
+        <Box
+          position="absolute"
+          top={cardTop(row, lines.length, rows) - row}
+          left={-(cw + 1)}
+          flexDirection="column"
+          display="none"
+          hover={{ scope, display: 'flex' }}
+        >
+          {lines.map(drawLine)}
+        </Box>
+      </Box>,
+    ]
+  })
+  return (
+    <Box key="prompt-rail-column" flexDirection="column">
+      {own}
+      {ticks}
+    </Box>
+  )
+}
+
+// transcript の行を描くたびに、位置を記録し、一番上の行なら列を重ねる
+type OnScreen = { first: number; last: number; of: number } | null | undefined
+
+async function onRow($: EngineInterface, rail: Rail, e: RenderInput, key: string, onScreen: OnScreen, next: () => Promise<RenderElement>) {
+  if (rail.viewAgent === undefined) {
+    rail.drawn.set(key, e.requestId)
+    report(rail, `${e.component}\u0000${e.requestId}`, key, onScreen)
+    redrawIfChanged($, rail)
+  }
+  return drawColumn($, rail, e, await next())
 }
 
 export const register: Register = on => {
@@ -287,20 +461,20 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     // hot reload 後は一覧が空から始まるので、このセッションのトランスクリプトから作り直す
-    const kept = (await $.store.get(`${TRANSCRIPT_KEY}${await $.session.id()}`)) as { path?: unknown } | undefined
-    if (typeof kept?.path === 'string') await readTranscript($, rail, kept.path)
+    const { value } = await $.state.get(TRANSCRIPT)
+    if (typeof value === 'string') await readTranscript($, rail, value)
     return next(e)
   })
 
   on('classic.SessionStart', async ($, e, next) => {
     // 一覧が作れなくても、セッションの開始は止めない
     if (e.source === 'clear') {
-      resetRail(rail)
-      await redraw($).catch(() => {})
+      Object.assign(rail, newRail())
+      redraw($, rail)
     } else {
       await readTranscript($, rail, e.transcript_path).catch(() => {})
     }
-    await rememberTranscript($, e.session_id, e.transcript_path).catch(() => {})
+    await $.state.set(TRANSCRIPT, e.transcript_path).catch(() => {})
     return next(e)
   })
 
@@ -314,8 +488,9 @@ export const register: Register = on => {
     rail.isRunning = true
     if (rail.reader.path) await readTranscript($, rail, rail.reader.path)
     // rewind や compact で消えた行は、新しいターンの行と見分けがつかないので外す
-    for (const [name, key] of rail.screen) if (!rail.knownKeys.has(key) && !rail.byKey.has(key)) rail.screen.delete(name)
-    await redraw($)
+    for (const [name, { key }] of rail.screen) if (!rail.orderByKey.has(key) && !rail.byKey.has(key)) rail.screen.delete(name)
+    measure(rail)
+    redraw($, rail)
     return next(e)
   })
 
@@ -325,193 +500,36 @@ export const register: Register = on => {
       rail.isRunning = false
       const newest = rail.list.at(-1)
       if (newest) rail.reported.set(rowKey(newest.id), (rail.reported.get(rowKey(newest.id)) ?? 0) + e.durationMs)
-      await redraw($)
+      redraw($, rail)
     }
     return result
   })
 
   on('ui.render', { component: 'UserMessage' }, ($, e, next) => {
     const text = cleanText(e.props.text)
-    if (PROMPT_KINDS.has(e.props.origin.kind) && isPromptText(text) && e.requestId !== PROVISIONAL_ID) {
-      if (noteDrawn(rail, e.requestId, text)) redrawLater($)
-      report($, rail, e.component, e.requestId, e.props.onScreen)
+    if (PROMPT_KINDS.has(e.props.origin.kind) && isPromptText(text) && e.requestId !== PROVISIONAL_ID && rail.viewAgent === undefined) {
+      noteDrawn(rail, e.requestId, text)
     }
-    return next(e)
+    return onRow($, rail, e, rowKey(e.requestId), e.props.onScreen, () => next(e))
   })
-
-  // 応答とツールの行は、それが答えているプロンプトの位置を示す
-  on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => {
-    report($, rail, e.component, e.requestId, e.props.onScreen)
-    return next(e)
-  })
-  on('ui.render', { component: 'ToolUse' }, ($, e, next) => {
-    report($, rail, e.component, e.requestId, e.props.onScreen)
-    return next(e)
-  })
-  on('ui.render', { component: 'ToolResult' }, ($, e, next) => {
-    report($, rail, e.component, e.requestId, e.props.onScreen)
-    return next(e)
-  })
+  on('ui.render', { component: 'AssistantMessage' }, ($, e, next) => onRow($, rail, e, rowKey(e.requestId), e.props.onScreen, () => next(e)))
+  on('ui.render', { component: 'ToolUse' }, ($, e, next) => onRow($, rail, e, rowKey(e.requestId), e.props.onScreen, () => next(e)))
+  on('ui.render', { component: 'ToolResult' }, ($, e, next) => onRow($, rail, e, rowKey(e.requestId), e.props.onScreen, () => next(e)))
   on('ui.render', { component: 'ToolGroup' }, ($, e, next) => {
-    // まとめて畳まれたツール群は、最初の呼び出しとして数える
-    const id = e.props.calls.find(call => call.tool_use_id)?.tool_use_id
-    if (id) report($, rail, e.component, id, e.props.onScreen)
-    return next(e)
+    return onRow($, rail, e, groupKey(e.props.calls, e.requestId), e.props.onScreen, () => next(e))
   })
+  on('ui.render', { component: 'CommandOutput' }, ($, e, next) => onRow($, rail, e, rowKey(e.requestId), e.props.onScreen, () => next(e)))
+  on('ui.render', { component: 'TurnDuration' }, ($, e, next) => onRow($, rail, e, rowKey(e.requestId), e.props.onScreen, () => next(e)))
+  on('ui.render', { component: 'InfoNotice' }, ($, e, next) => onRow($, rail, e, rowKey(e.requestId), e.props.onScreen, () => next(e)))
 
-  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    await $.state.get(MOVED)
-    if (e.surface !== 'terminal') return next(e)
-    if (e.props.view.agentId !== rail.viewAgent) rail.screen.clear()
-    rail.viewAgent = e.props.view.agentId
-    if (e.props.hasSurvey || rail.viewAgent !== undefined || rail.list.length === 0) return next(e)
-    // 帯は他の mod と分け合う。下にある mod とエンジンの描画を捨てずに、レールの上に残す
-    const below = await next(e)
-    const { Box, Text, Button } = $.ui.resolve(e)
-
-    const list = rail.list
-    const width = Math.max(12, e.props.bodyColumns)
-    const layout = chooseLayout(e.props.maxRows)
-    const current = currentIndex(rail)
-    rail.drawnCurrent = current
-    // inline のときは、tick に使う幅を半分までにしてカードの場所を残す
-    const win = railWindow(list.length, current, layout.card === 'inline' ? Math.floor(width / 2) : width)
-    const shown = Array.from({ length: win.size }, (_, k) => win.first + k)
-    const lead = RAIL_INSET + (win.isClipped ? TICK_GAP : 0)
-    const tickX = (i: number) => lead + (i - win.first) * TICK_GAP
-    const scope = (i: number) => `prompt-rail-${i}`
-
-    // ---- カード ----
-    // beUI のカード: 控えめな枠、太字のタイトル、薄い説明。番号は角丸のピルにし、
-    // ホバー中はアクセント色にする。色はテーマのキーで指定し、テーマに追従させる
-    type Seg = { text: string; dim?: boolean; bold?: boolean; color?: string; bg?: string }
-    const room = width - RAIL_INSET * 2
-    // inline のカードは、tick 列(と › の印)の右に2セル空けて置き、右端に RAIL_INSET 残す
-    const railEnd = lead + win.size * TICK_GAP + (win.isClipped ? 1 : 0)
-    const cw = layout.card === 'line' ? room : layout.card === 'inline' ? width - railEnd - 2 - RAIL_INSET : cardWidth(room)
-    const xOf = (i: number) => RAIL_INSET + (layout.card === 'line' || layout.card === 'inline' ? 0 : cardLeft(tickX(i) - RAIL_INSET, room))
-    const pill = (i: number, isHovered: boolean): Seg[] => {
-      const tone = isHovered ? 'suggestion' : 'subtle'
-      return [
-        { text: ICON.pillStart, color: tone },
-        { text: ` ${i + 1} `, color: isHovered ? 'inverseText' : 'text', bg: tone, bold: isHovered },
-        { text: ICON.pillEnd, color: tone },
-      ]
+  // 帯には何も描かない。表示中の会話がサブエージェントかどうかだけを見る
+  on('ui.render', { component: 'AbovePrompt' }, ($, e, next) => {
+    if (e.props.view.agentId !== rail.viewAgent) {
+      rail.viewAgent = e.props.view.agentId
+      rail.screen.clear()
+      rail.top = undefined
+      $.clock.after(0, () => redraw($, rail))
     }
-    const pillWidth = (i: number) => cellWidth(` ${i + 1} `) + 2
-    // ピルと本文、続けて要約(幅の半分まで)を、1行 w セルに収める
-    const headline = (i: number, w: number, isHovered: boolean, withDetail: boolean): Seg[] => {
-      const parts = headlineParts(list[i]!.text, withDetail ? turnOf(rail, i) : '', w - pillWidth(i) - 1)
-      return [
-        ...pill(i, isHovered),
-        { text: ' ' },
-        { text: parts.title, bold: isHovered, dim: !isHovered },
-        { text: parts.detail, dim: true },
-        { text: parts.pad },
-      ]
-    }
-    const detailLine = (i: number, w: number): Seg[] => {
-      const indent = pillWidth(i) + 1
-      return [{ text: ' '.repeat(indent) }, { text: fit(turnOf(rail, i), w - indent), dim: true }]
-    }
-    const cardLines = (i: number, isHovered: boolean): Seg[][] => {
-      if (layout.card === 'line' || layout.card === 'inline') return [headline(i, cw, isHovered, true)]
-      if (layout.card === 'plain') return [headline(i, cw, isHovered, false), detailLine(i, cw)]
-      const inner = cw - 4
-      const side = (segs: Seg[]): Seg[] => [{ text: '│ ', dim: true }, ...segs, { text: ' │', dim: true }]
-      return [
-        [{ text: `╭${'─'.repeat(cw - 2)}╮`, dim: true }],
-        side(headline(i, inner, isHovered, false)),
-        side(detailLine(i, inner)),
-        [{ text: `╰${'─'.repeat(cw - 2)}╯`, dim: true }],
-      ]
-    }
-    const drawLine = (segs: Seg[]) => (
-      <Box height={1} flexDirection="row">
-        {segs.map(seg => (
-          <Text dimColor={seg.dim} bold={seg.bold} color={seg.color} backgroundColor={seg.bg} wrap="truncate-end">
-            {seg.text}
-          </Text>
-        ))}
-      </Box>
-    )
-
-    // 休止時は読んでいるプロンプトのカードを控えめに出す。ホバーしたカードは、その分の
-    // 幅を空白で塗りつぶして重ねる(端末ではホバーで要素を隠せないため、上から覆う)
-    const restX = xOf(current)
-    // カードが十分な幅を取れないときは、カードを出さず tick だけにする
-    const hasCard = cw >= 16
-    const inlineCard =
-      layout.card !== 'inline' || !hasCard ? null : (
-        <Box height={1} width={cw + 2} flexDirection="column">
-          {drawLine([{ text: '  ' }, ...cardLines(current, false)[0]!])}
-          {shown.map(i => (
-            <Box position="absolute" top={0} left={0} flexDirection="column" display="none" hover={{ scope: scope(i), display: 'flex' }}>
-              {drawLine([{ text: '  ' }, ...cardLines(i, true)[0]!])}
-            </Box>
-          ))}
-        </Box>
-      )
-    const cards =
-      layout.card === 'inline' || !hasCard ? null : (
-        <Box flexDirection="column" height={layout.cardRows} width={width}>
-          {cardLines(current, false).map(segs => drawLine([{ text: ' '.repeat(restX) }, ...segs]))}
-          {shown.map(i => {
-            const x = xOf(i)
-            const from = Math.min(x, restX)
-            const to = Math.max(x, restX) + cw
-            return (
-              <Box position="absolute" top={0} left={from} flexDirection="column" display="none" hover={{ scope: scope(i), display: 'flex' }}>
-                {cardLines(i, true).map(segs => drawLine([{ text: ' '.repeat(x - from) }, ...segs, { text: ' '.repeat(to - x - cw) }]))}
-              </Box>
-            )
-          })}
-        </Box>
-      )
-
-    // ---- tick ----
-    // 1行の点字。読んでいる位置だけ高く明るくし、ホバーした tick も明るくする
-    const gap = ' '.repeat(TICK_GAP - 1)
-    const rail1 = (
-      <Box height={1} flexDirection="row" width={width}>
-        <Text>{' '.repeat(RAIL_INSET)}</Text>
-        {win.isClipped ? <Text dimColor>{win.first > 0 ? '‹ ' : '  '}</Text> : null}
-        {/* Fragment は Box になり、高さ1行の中で縦に積まれて空白が消えるので、配列で平らに並べる */}
-        {shown.flatMap(i => [
-          <Button
-            key={`jump-${i}`}
-            plain
-            label={tickGlyph(i === current, rail.unreachable.has(rowKey(list[i]!.id)))}
-            dimColor={i !== current}
-            hover={{ scope: scope(i), dimColor: false, bold: true }}
-            onPress={() => {}}
-          />,
-          <Text>{gap}</Text>,
-        ])}
-        {win.isClipped && win.first + win.size < list.length ? <Text dimColor>›</Text> : null}
-        {inlineCard}
-      </Box>
-    )
-    // 余白は marginTop ではなく空行として描く(帯の高さの計算に確実に入れるため)
-    return (
-      <Box flexDirection="column">
-        {below}
-        <Box flexDirection="column">
-          {layout.margin > 0 ? (
-            <Box height={1}>
-              <Text> </Text>
-            </Box>
-          ) : null}
-          {cards}
-          {rail1}
-        </Box>
-      </Box>
-    )
-  })
-
-  on('ui.press', { plugin: 'prompt-rail' }, async ($, e, next) => {
-    const i = Number(/^jump-(\d+)$/.exec(e.element)?.[1])
-    if (Number.isInteger(i)) await jump($, rail, i)
     return next(e)
   })
 }

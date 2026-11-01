@@ -1,4 +1,4 @@
-// 帯の見た目を決める純粋関数。Preview Rail(beUI)の寸法を端末のセルに置き換える。
+// レールの見た目を決める純粋関数。位置と幅は端末のセルで数える。
 import type { Turn } from './transcript.ts'
 
 // 東アジアの全角と絵文字は2セル
@@ -38,16 +38,28 @@ export function fit(text: string, width: number) {
   return out + ' '.repeat(Math.max(0, width - used))
 }
 
-// カードの1行: 本文のすぐ後ろに2セル空けて要約を続け、残りを空白で埋めて width セルにする。
-// 本文は TITLE_MAX セルまで、要約は width の半分まで。右端に寄せると、広い端末で本文から離れすぎる
-export const TITLE_MAX = 60
-export function headlineParts(title: string, detail: string, width: number) {
-  const detailW = detail ? Math.min(cellWidth(detail), Math.floor(width / 2)) : 0
-  const room = Math.max(1, width - (detail ? detailW + 2 : 0))
-  const titleW = Math.min(cellWidth(title.replace(/\s+/g, ' ').trim()), TITLE_MAX, room)
-  const head = fit(title, titleW)
-  const tail = detail ? `  ${fit(detail, detailW)}` : ''
-  return { title: head, detail: tail, pad: ' '.repeat(Math.max(0, width - titleW - cellWidth(tail))) }
+// 1行 width セルずつに折り返し、maxLines 行まで返す。収まらない分は最後の行を … で切る。
+// 各行は width セルまで空白で埋める
+export function wrap(text: string, width: number, maxLines: number) {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  const lines: string[] = []
+  let line = ''
+  let used = 0
+  for (const char of flat) {
+    if (used + cells(char) > width) {
+      lines.push(line)
+      line = ''
+      used = 0
+    }
+    line += char
+    used += cells(char)
+  }
+  if (line) lines.push(line)
+  if (lines.length > maxLines) {
+    lines.length = maxLines
+    lines[maxLines - 1] = fit(lines[maxLines - 1]! + '……', width)
+  }
+  return lines.map(l => fit(l, width))
 }
 
 export function duration(ms: number) {
@@ -87,40 +99,18 @@ export function turnLine(turn: Turn | undefined, isRunning: boolean) {
   return parts.join('  ')
 }
 
-// tick は点字1文字。Preview Rail の休止時と同じく全部同じ高さにそろえ、読んでいる
-// 位置だけを高く(点4つ)する。移動できなかったプロンプトは点1つで区別する
-export const tickGlyph = (isCurrent: boolean, isUnreachable = false) =>
-  isCurrent ? '\u{2847}' : isUnreachable ? '\u{2804}' : '\u{2844}' // ⡇ / ⠄ / ⡄
-
-// 帯の行数の内訳。入力欄の上に使える行数(maxRows)は端末の高さで変わり、実際には
-// 2行ほどしか無いことが多い。トランスクリプトとの間の余白(1行)を最優先で取り、
-// 残りでカードを大きくする。2行しか無ければ、カードを tick と同じ行の右に並べる
-// ('inline')。下側はエンジンが1行空けている。
-export type Layout = { card: 'boxed' | 'plain' | 'line' | 'inline'; cardRows: number; margin: number }
-export function chooseLayout(maxRows: number): Layout {
-  if (maxRows >= 1 + 4 + 1) return { card: 'boxed', cardRows: 4, margin: 1 }
-  if (maxRows >= 1 + 2 + 1) return { card: 'plain', cardRows: 2, margin: 1 }
-  if (maxRows >= 1 + 1 + 1) return { card: 'line', cardRows: 1, margin: 1 }
-  return { card: 'inline', cardRows: 0, margin: maxRows >= 2 ? 1 : 0 }
+// tick を置く行ごとの、プロンプトの番号。count 個を rows 行に古い順で等間隔に置き、
+// 最新を一番下にする。count が rows を超えると、同じ行に複数のプロンプトが入る
+export function tickRows(count: number, rows: number): number[][] {
+  const out: number[][] = Array.from({ length: Math.max(1, rows) }, () => [])
+  const last = out.length - 1
+  for (let i = 0; i < count; i++) out[count === 1 ? last : Math.round((i * last) / (count - 1))]!.push(i)
+  return out
 }
 
-// tick は2セルおき。左端は少し空ける: ウィンドウ端だとポインタが最初の tick を
-// 離れる瞬間をホバー終了として拾えない
-export const RAIL_INSET = 2
-export const TICK_GAP = 2
-// 一度に描く tick の上限。カードの重ね描きで描画の文字数上限に近づかないようにする
-export const MAX_TICKS = 60
-
-// 収まらない数のプロンプトは、読んでいる位置を中心にした範囲だけ描き、‹ › で続きを示す
-export function railWindow(count: number, center: number, width: number) {
-  const fits = Math.max(1, Math.floor((width - RAIL_INSET) / TICK_GAP))
-  if (count <= Math.min(fits, MAX_TICKS)) return { first: 0, size: count, isClipped: false }
-  const size = Math.max(1, Math.min(fits - 2, MAX_TICKS))
-  const first = Math.min(Math.max(0, center - Math.floor(size / 2)), count - size)
-  return { first, size, isClipped: true }
-}
-
-// カードの幅と、tick の真上に来る左端位置
+// カードの幅
 export const CARD_MAX = 56
-export const cardWidth = (width: number) => Math.max(12, Math.min(CARD_MAX, width))
-export const cardLeft = (tickX: number, width: number) => Math.max(0, Math.min(tickX - 3, width - cardWidth(width)))
+export const cardWidth = (columns: number) => Math.max(20, Math.min(CARD_MAX, columns - 4))
+
+// カードの上端の行。tick の行に合わせ、viewport の下にはみ出すなら上へ寄せる
+export const cardTop = (tickRow: number, cardRows: number, height: number) => Math.max(0, Math.min(tickRow, height - cardRows))

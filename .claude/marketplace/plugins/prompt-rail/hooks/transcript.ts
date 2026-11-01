@@ -17,8 +17,9 @@ export type TranscriptIndex = {
   prompts: Prompt[]
   // 応答行の uuid と tool_use id → それが属するプロンプトの位置
   owners: Map<string, number>
-  // ファイルにある全行の uuid(rewind で外れた枝も含む)
-  known: Set<string>
+  // ファイルにある全行の uuid と tool_use id → ファイルでの順番(rewind で外れた枝も含む)。
+  // tool_use id は、それを呼んだ応答行と同じ順番
+  order: Map<string, number>
 }
 
 // 1行を、索引づけに要る情報だけに縮めたもの。長いセッションでも保持量を抑える
@@ -28,7 +29,7 @@ export type Row = {
   isSidechain: boolean
   at: number
 } & (
-  | { kind: 'prompt' | 'queued'; text: string }
+  | { kind: 'prompt' | 'queued' | 'command'; text: string }
   | { kind: 'reply'; tools: { id: string; name: string; file?: string }[]; isError: boolean }
   | { kind: 'duration'; ms: number }
   | { kind: 'interrupt' }
@@ -44,6 +45,15 @@ const EDITING_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit'])
 
 export const cleanText = (text: string) => text.replace(VIEW_CONTEXT, '').trim()
 export const isPromptText = (text: string) => text !== '' && !WRAPPER.test(text) && !text.startsWith('/')
+
+// slash command の行(`<command-name>/reframe</command-name><command-args>…</command-args>`)を、打った形に戻す
+const COMMAND = /<command-name>(\/[^<]+)<\/command-name>/
+const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/
+export function commandText(text: string) {
+  const name = COMMAND.exec(text)?.[1]
+  if (name === undefined) return undefined
+  return `${name} ${COMMAND_ARGS.exec(text)?.[1] ?? ''}`.trim()
+}
 
 const textOf = (content: unknown) => {
   if (typeof content === 'string') return content
@@ -95,6 +105,8 @@ export function parseLine(line: string): Row | undefined {
   // ツール実行中の中断通知は tool_result と同じ行に乗るので、tool_result の判定より先に見る
   if (INTERRUPTED.test(text)) return { ...base, kind: 'interrupt' }
   if (Array.isArray(content) && content.some((block: any) => block?.type === 'tool_result')) return { ...base, kind: 'other' }
+  const command = commandText(text)
+  if (command !== undefined) return { ...base, kind: 'command', text: command }
   return isPromptText(text) ? { ...base, kind: 'prompt', text } : { ...base, kind: 'other' }
 }
 
@@ -117,20 +129,33 @@ export function indexRows(rows: readonly Row[]): TranscriptIndex {
   // ターンを始めたプロンプト。差し込まれたプロンプトは一覧に載るが、ターンの要約は始めた側に残す
   let starter = -1
   const times: { start: number; last: number }[] = []
+  // 応答がまだ続いていない slash command。/model のように応答が無いものは、次のプロンプトの前に外す
+  let isUnanswered = false
+  const dropUnanswered = () => {
+    if (!isUnanswered) return
+    prompts.pop()
+    times.pop()
+    starter = prompts.length - 1
+    isUnanswered = false
+  }
   for (const row of rows) {
     if (row.isSidechain || !live.has(row.uuid)) continue
+    if (row.kind === 'prompt' || row.kind === 'command' || row.kind === 'queued') dropUnanswered()
     const turn = prompts[starter]?.turn
     switch (row.kind) {
       case 'prompt':
+      case 'command':
         prompts.push({ id: row.uuid, text: row.text, turn: { tools: 0, files: [] } })
         starter = prompts.length - 1
         times[starter] = { start: row.at, last: row.at }
+        isUnanswered = row.kind === 'command'
         break
       case 'queued':
         prompts.push({ id: row.uuid, text: row.text, turn: { tools: 0, files: [] } })
         break
       case 'reply': {
         if (!turn) break
+        isUnanswered = false
         // 応答は、届いたかどうかに関係なく最新のプロンプトの下に並ぶ
         const owner = prompts.length - 1
         owners.set(row.uuid, owner)
@@ -151,9 +176,15 @@ export function indexRows(rows: readonly Row[]): TranscriptIndex {
         break
     }
   }
+  dropUnanswered()
   prompts.forEach((prompt, i) => {
     const time = times[i]
     if (time && Number.isFinite(time.start) && time.last > time.start) prompt.turn.spanMs = time.last - time.start
   })
-  return { prompts, owners, known: new Set(rows.map(row => row.uuid)) }
+  const order = new Map<string, number>()
+  rows.forEach((row, i) => {
+    order.set(row.uuid, i)
+    if (row.kind === 'reply') for (const tool of row.tools) order.set(tool.id, i)
+  })
+  return { prompts, owners, order }
 }
