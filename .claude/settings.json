@@ -1,11 +1,19 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "fileSuggestion": {
-    "type": "command",
-    "command": "bun ~/.claude/bun-file-suggestion.mjs"
+  "agentPushNotifEnabled": true,
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
   },
-  "respectGitignore": true,
   "cleanupPeriodDays": 99999,
+  "effortLevel": "high",
+  "enabledPlugins": {
+    "codex@openai-codex": true,
+    "mattpocock-skills@claude-plugins-official": true,
+    "prompt-rail@atnook-dotfiles": true,
+    "sitrep@atnook-dotfiles": true
+  },
   "env": {
     "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR": "1",
     "CLAUDE_CODE_ATTRIBUTION_HEADER": "0",
@@ -21,65 +29,57 @@
     "DISABLE_INSTALLATION_CHECKS": "1",
     "ENABLE_TOOL_SEARCH": "1"
   },
-  "attribution": {
-    "commit": "",
-    "pr": "",
-    "sessionUrl": false
+  "extraKnownMarketplaces": {
+    "atnook-dotfiles": {
+      "source": {
+        "repo": "atriumnook/dotfiles",
+        "source": "github"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "repo": "openai/codex-plugin-cc",
+        "source": "github"
+      }
+    }
   },
-  "permissions": {
-    "allow": [],
-    "deny": [],
-    "ask": []
+  "fileSuggestion": {
+    "command": "bun ~/.claude/bun-file-suggestion.mjs",
+    "type": "command"
   },
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "^(startup|resume|clear|compact|fork)$",
         "hooks": [
           {
-            "type": "command",
             "command": "f=\"$HOME/.claude/hooks/herdr-agent-state.sh\"; [ ! -f \"$f\" ] || bash \"$f\" session",
-            "timeout": 10
+            "timeout": 10,
+            "type": "command"
           }
-        ]
+        ],
+        "matcher": "^(startup|resume|clear|compact|fork)$"
       }
     ]
   },
-  "statusLine": {
-    "type": "command",
-    "command": "bun ~/.claude/bun-braille-dots-statusline.mjs",
-    "refreshInterval": 60
-  },
-  "enabledPlugins": {
-    "codex@openai-codex": true,
-    "mattpocock-skills@claude-plugins-official": true,
-    "prompt-rail@atnook-dotfiles": true,
-    "sitrep@atnook-dotfiles": true
-  },
-  "extraKnownMarketplaces": {
-    "openai-codex": {
-      "source": {
-        "source": "github",
-        "repo": "openai/codex-plugin-cc"
-      }
-    },
-    "atnook-dotfiles": {
-      "source": {
-        "source": "github",
-        "repo": "atriumnook/dotfiles"
-      }
-    }
-  },
   "language": "japanese",
-  "effortLevel": "high",
+  "model": "opus",
   "modelSettings": {
     "claude-fable-5-1": {
       "effortLevel": "high"
     }
   },
+  "permissions": {
+    "allow": [],
+    "ask": [],
+    "deny": []
+  },
+  "remoteControlAtStartup": true,
+  "respectGitignore": true,
   "showThinkingSummaries": true,
   "skipDangerousModePermissionPrompt": true,
-  "remoteControlAtStartup": true,
-  "agentPushNotifEnabled": true,
-  "model": "opus"
+  "statusLine": {
+    "command": "bun ~/.claude/bun-braille-dots-statusline.mjs",
+    "refreshInterval": 60,
+    "type": "command"
+  }
 }
