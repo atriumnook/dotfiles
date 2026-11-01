@@ -57,7 +57,7 @@ describe('indexRows', () => {
       ),
     )
     expect(index.prompts.map(p => p.text)).toEqual(['残る', '巻き戻して送り直した'])
-    expect(index.known.has('u2')).toBe(true)
+    expect(index.order.has('u2')).toBe(true)
   })
 
   test('実行中に差し込んだプロンプトも載るが、ターンの要約は始めた側に残る', () => {
@@ -90,6 +90,29 @@ describe('indexRows', () => {
   test('artifact の閲覧状態を外し、打った文面だけを残す', () => {
     const text = '<artifact-view-context artifact="abc">\n{"context":{"x":1}}\n</artifact-view-context>\n本文'
     expect(indexRows(rows(user('u1', null, text))).prompts.map(p => p.text)).toEqual(['本文'])
+  })
+
+  test('応答が続いた slash command はプロンプトとして載せ、応答の無いものは載せない', () => {
+    const index = indexRows(
+      rows(
+        user('c1', null, '<command-message>reframe</command-message>\n<command-name>/reframe</command-name>\n<command-args>案を出して</command-args>'),
+        user('m1', 'c1', 'skill の本文', { isMeta: true }),
+        assistant('a1', 'm1', [{ id: 't1', name: 'Read' }]),
+        user('c2', 'a1', '<command-name>/model</command-name>'),
+        user('o2', 'c2', '<local-command-stdout>Set model to opus</local-command-stdout>'),
+        user('c3', 'o2', '<command-name>/html-plan</command-name>\n<command-args></command-args>'),
+        assistant('a3', 'c3'),
+        user('c4', 'a3', '<command-name>/clear</command-name>'),
+      ),
+    )
+    expect(index.prompts.map(p => p.text)).toEqual(['/reframe 案を出して', '/html-plan'])
+    expect(index.prompts[0]!.turn.tools).toBe(1)
+    expect(index.owners.get('a3')).toBe(1)
+  })
+
+  test('行と tool_use id を、ファイルでの順番で引ける', () => {
+    const index = indexRows(rows(user('u1', null, '一つ目'), assistant('a1', 'u1', [{ id: 't1', name: 'Bash' }]), user('u2', 'a1', '二つ目')))
+    expect([index.order.get('u1'), index.order.get('a1'), index.order.get('t1'), index.order.get('u2')]).toEqual([0, 1, 1, 2])
   })
 
   test('書き込み途中の行や uuid の無い行は読み飛ばす', () => {

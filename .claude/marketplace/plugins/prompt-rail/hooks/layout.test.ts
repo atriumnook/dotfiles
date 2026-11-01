@@ -1,28 +1,34 @@
 import { describe, expect, test } from 'claude-code/testing'
-import { ICON, MAX_TICKS, TITLE_MAX, tickGlyph, cellWidth, chooseLayout, fit, headlineParts, railWindow, turnLine } from './layout.ts'
+import { ICON, cardTop, cellWidth, fit, tickRows, turnLine, wrap } from './layout.ts'
 
 describe('layout', () => {
-  test('tick は全部同じ高さで、読んでいる位置だけ高い', () => {
-    expect([tickGlyph(false), tickGlyph(true)]).toEqual(['⡄', '⡇'])
-    // 移動できなかったプロンプトは点1つ。読んでいる位置ならそちらを優先
-    expect([tickGlyph(false, true), tickGlyph(true, true)]).toEqual(['⠄', '⡇'])
+  test('tick は古い順に上から等間隔に並び、最新が一番下に来る', () => {
+    expect(tickRows(3, 5)).toEqual([[0], [], [1], [], [2]])
+    expect(tickRows(1, 5)).toEqual([[], [], [], [], [0]])
+    expect(tickRows(0, 3)).toEqual([[], [], []])
+    // 行数と同じ数なら1行に1つずつ
+    expect(tickRows(4, 4)).toEqual([[0], [1], [2], [3]])
   })
 
-  test('上の余白を最優先で取り、残りの行数に応じて 枠付き → 2行 → 1行 → tick の右に並べる と縮む', () => {
-    expect(chooseLayout(10)).toEqual({ card: 'boxed', cardRows: 4, margin: 1 })
-    expect(chooseLayout(6).card).toBe('boxed')
-    expect(chooseLayout(5)).toEqual({ card: 'plain', cardRows: 2, margin: 1 })
-    expect(chooseLayout(3)).toEqual({ card: 'line', cardRows: 1, margin: 1 })
-    expect(chooseLayout(2)).toEqual({ card: 'inline', cardRows: 0, margin: 1 })
-    expect(chooseLayout(1)).toEqual({ card: 'inline', cardRows: 0, margin: 0 })
+  test('行数を超えるプロンプトは、同じ行にまとめる。順番は入れ替えない', () => {
+    const rows = tickRows(7, 3)
+    expect(rows.flat()).toEqual([0, 1, 2, 3, 4, 5, 6])
+    expect(rows.every(row => row.length > 0)).toBe(true)
+    expect(rows.at(-1)).toContain(6)
   })
 
-  test('収まらないときは読んでいる位置を中心に切り出す', () => {
-    expect(railWindow(5, 4, 80)).toEqual({ first: 0, size: 5, isClipped: false })
-    const win = railWindow(100, 50, 42) // 20 個分の幅 → 両端の印を除いて 18 個
-    expect(win).toEqual({ first: 41, size: 18, isClipped: true })
-    expect(railWindow(100, 99, 42).first).toBe(82)
-    expect(railWindow(500, 0, 1000).size).toBe(MAX_TICKS)
+  test('カードは tick の行に合わせ、下にはみ出すなら上へ寄せ、viewport の上端より上には出さない', () => {
+    expect(cardTop(3, 4, 20)).toBe(3)
+    expect(cardTop(18, 4, 20)).toBe(16)
+    expect(cardTop(5, 30, 20)).toBe(0)
+  })
+
+  test('本文を幅で折り返し、行数を超える分を … で切る', () => {
+    expect(wrap('あいうえおかきくけこ', 6, 4)).toEqual(['あいう', 'えおか', 'きくけ', 'こ    '])
+    const cut = wrap('あいうえおかきくけこ', 6, 2)
+    expect(cut).toEqual(['あいう', 'えお…'.padEnd(4)])
+    expect(cut.map(cellWidth)).toEqual([6, 6])
+    expect(wrap('a\n  b', 5, 2)).toEqual(['a b  '])
   })
 
   test('全角を2セルと数えて切り詰め、幅まで空白で埋める', () => {
@@ -30,19 +36,6 @@ describe('layout', () => {
     expect(fit('あいうえお', 7)).toBe('あいう…')
     expect(cellWidth(fit('あいうえお', 7))).toBe(7)
     expect(fit('a\n  b', 5)).toBe('a b  ')
-  })
-
-  test('カードの1行は、本文のすぐ後ろに要約を続け、残りを空白で埋める', () => {
-    const wide = headlineParts('短い依頼', '12s', 200)
-    expect(wide.title + wide.detail).toBe('短い依頼  12s')
-    expect(cellWidth(wide.title + wide.detail + wide.pad)).toBe(200)
-    // 本文は TITLE_MAX まで、要約は幅の半分まで
-    const long = headlineParts('あ'.repeat(100), '1m 5s', 200)
-    expect(cellWidth(long.title)).toBe(TITLE_MAX)
-    const narrow = headlineParts('長い本文がここに入ります', '󰔛 3m 5s  9 tools', 20)
-    expect(cellWidth(narrow.detail)).toBe(2 + 10)
-    expect(cellWidth(narrow.title + narrow.detail + narrow.pad)).toBe(20)
-    expect(headlineParts('本文だけ', '', 10)).toEqual({ title: '本文だけ', detail: '', pad: '  ' })
   })
 
   test('ターンの要約を Nerd Font のアイコンで添える', () => {

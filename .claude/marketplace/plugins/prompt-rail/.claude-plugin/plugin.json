@@ -1,6 +1,6 @@
 {
   "name": "prompt-rail",
-  "description": "A rail of this session's prompts above the prompt input, in the style of beUI's Preview Rail: hover a tick to preview a prompt, click it to jump there.",
+  "description": "A rail of this session's prompts along the transcript's right edge, like a scrollbar: hover a tick to preview a prompt, click it to jump there.",
   "author": { "name": "atnook" },
   "license": "MIT",
   "keywords": ["navigation", "transcript", "prompts", "function-hooks"],
