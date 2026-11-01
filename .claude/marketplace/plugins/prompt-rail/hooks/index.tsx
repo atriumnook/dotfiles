@@ -413,14 +413,15 @@ function drawColumn($: EngineInterface, rail: Rail, e: RenderInput, own: RenderE
     const isSeeking = rail.seeking !== undefined && prompts.some(i => rowKey(rail.list[i]!.id) === rail.seeking!.key)
     const isReading = prompts.includes(reading)
     const isInRange = range !== undefined && prompts.some(i => i >= range.from && i <= range.to)
-    const color = isSeeking ? 'warning' : isInRange ? 'claude' : 'subtle'
+    // subtle は背景に溶けるので、見えていない tick も inactive で描く
+    const color = isSeeking ? 'warning' : isReading ? 'text' : isInRange ? 'claude' : 'inactive'
     const lines = cardLines(prompts)
     return [
       // Button の label の Text は group を heat できないので、外側の Box で heat する
       <Box key={scope} position="absolute" top={base + row} left={columns - 1} hover={{ scope }}>
         <Button key={`jump-${row}`} plain onPress={() => void press($, rail, prompts)}>
           <Text color={color} weight={isSeeking || isReading ? 'semibold' : undefined} hover={{ scope, color: 'suggestion', bold: true }}>
-            {prompts.length > 1 ? '=' : '-'}
+            {prompts.length > 1 ? '≡' : '━'}
           </Text>
         </Button>
         <Box
