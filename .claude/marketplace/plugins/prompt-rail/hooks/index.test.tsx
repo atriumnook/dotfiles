@@ -60,14 +60,15 @@ test('見えている行のうち一番下の行だけが、右端に tick を�
   expect(await second!.findAll({ type: 'Button' })).toHaveLength(0)
 })
 
-test('見えている範囲の tick は Claude の色で、読んでいる位置は太字で示す', async ($, on) => {
+test('見えている範囲の tick は Claude の色で、読んでいる位置は白の太字で示す', async ($, on) => {
   const clock = mock.clock(on)
   engineDraws(on)
   const [, , third] = await drawPrompts($)
   await clock.advance(10)
 
-  const marks = await third!.findAll({ type: 'Text', text: '-' })
-  expect(marks.map((t: any) => t.props.color)).toEqual(['subtle', 'claude', 'claude'])
+  const marks = await third!.findAll({ type: 'Text', text: '━' })
+  // 見えていない tick も背景に溶けない inactive で描く
+  expect(marks.map((t: any) => t.props.color)).toEqual(['inactive', 'text', 'claude'])
   expect(marks.map((t: any) => t.props.weight)).toEqual([undefined, 'semibold', undefined])
   // pointer を乗せたときのカード。本文とターンの要約を枠に入れ、隠しておく
   expect(await third!.find({ type: 'Text', text: /最初のプロンプト/ })).toBeDefined()
