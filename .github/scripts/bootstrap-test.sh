@@ -91,6 +91,31 @@ repo_clean() {
   [[ -z $out ]]
 }
 
+# Claude Code などが書き戻して settings.json のキーが並び替わっても、jsonsort filter で差分にならないこと。
+# filter の定義(dotfiles.gitconfig)と jq は bootstrap で入るので、新しい zsh で確かめる
+settings_reorder_ignored() {
+  local out rc
+  out=$(new_zsh 'cd ~/.dotfiles &&
+    jq "to_entries | reverse | from_entries" .claude/settings.json >settings.reordered &&
+    mv settings.reordered .claude/settings.json &&
+    git status --porcelain -- .claude/settings.json')
+  rc=$?
+  git -C "$repo" checkout -q -- .claude/settings.json
+  printf '%s\n' "$out"
+  ((rc == 0)) && [[ -z $out ]]
+}
+
+# jsonsort filter が配列を並べ替えても、exec form の hook の args は書いた順のまま保存すること
+settings_args_kept() {
+  local sample got
+  sample=$(mktemp)
+  printf '%s\n' '{"b":["y","x"],"a":{"args":["--write","--config","f"]}}' >"$sample"
+  got=$(new_zsh "cd ~/.dotfiles && git cat-file -p \$(git hash-object -w --path=.claude/settings.json '$sample') | jq -c ." 2>&1)
+  rm -f "$sample"
+  echo "stored: $got"
+  [[ $got == '{"a":{"args":["--write","--config","f"]},"b":["x","y"]}' ]]
+}
+
 # checkout 先は所有者が違うことがあり、git が dubious ownership で拒否するため、所有者ごとコピーし直す。
 # setup.sh が upstream から pull して検証対象の commit から動かないよう、HEAD を切り離す
 cp -R "$GITHUB_WORKSPACE" "$repo"
@@ -116,6 +141,9 @@ check "新しい zsh で主なコマンドが使える" new_zsh '
     (( $+commands[$c] )) || { print -u2 "not found: $c"; rc=1; }
   done
   exit $rc'
+
+check "settings.json のキーの並べ替えは差分にならない" settings_reorder_ignored
+check "settings.json の hook の args は並べ替えずに保存する" settings_args_kept
 
 # omarchy や手動の `mise use -g` で repo に無いツールを足しても、repo に書き込まれないこと
 "$mise" use -g shellcheck@0 >/dev/null 2>&1

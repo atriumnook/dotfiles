@@ -32,3 +32,9 @@
 
 [alias]
     nb = "!f(){ \\\n  echo \"from: $(git branch --show-current)\"; \\\n  t=$(printf \"feature\\nbugfix\\nhotfix\\nrelease\\nchore\\n\" | fzf --no-sort --prompt=\"type > \"); \\\n  [ -z \"$t\" ] && echo \"cancelled\" && exit 1; \\\n  printf \"name: \"; read -r n; \\\n  [ -z \"$n\" ] && echo \"name is required\" && exit 1; \\\n  case \"$n\" in \\\n    *\" \"*|*/|*\"..\"*) echo \"invalid name\"; exit 1 ;; \\\n  esac; \\\n  git switch -c \"$t/$n\"; \\\n}; f"
+
+[filter "jsonsort"]
+    ; キーと配列の並びを揃えてから保存する(.gitattributes で settings.json に割り当てる)。
+    ; exec form の hook の args は順番が引数の並びそのものなので並べ替えない。
+    ; 値の中の ; がコメントにならないよう、全体を "..." で囲む
+    clean = "jq -S 'def norm: if type == \"object\" then with_entries(if .key == \"args\" then . else .value |= norm end) elif type == \"array\" then map(norm) | sort else . end; norm'"

@@ -1,3 +1,7 @@
 # Windows の git(core.autocrlf=true)でも LF で checkout する。CRLF になると、mise が LF で
 # 書き込む PowerShell profile の block と repo 側の内容が一致せず、毎回差分になる。
 * text=auto eol=lf
+
+# Claude Code などの関連ツールが書き戻すと、キーと配列の並びが変わる。並べ替えだけの変更が
+# 差分に混ざらないよう、保存する前に jsonsort filter(.config/git/dotfiles.gitconfig)で揃える
+.claude/settings.json filter=jsonsort
