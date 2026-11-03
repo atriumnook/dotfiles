@@ -108,26 +108,101 @@ test('lineDiff: 離れた変更は別の hunk になる', () => {
   assert.equal((d.match(/^@@/gm) || []).length, 2);
 });
 
-test('formatResponse: 判断の状態・補足・編集・取り消し・コメントを書き分ける', () => {
-  const md = HP.formatResponse({
-    title: '計画',
-    asks: [
-      { no: '1.2', q: '上限は?', picked: ['10件'], values: ['10'], proposed: ['3件'], status: 'changed', note: '一覧も欲しい\n2行目' },
-      { no: '2', q: '再送は?', picked: ['しない'], values: ['none'], proposed: ['しない'], status: 'confirmed', note: '' },
-      { no: '3', q: '経路は?', picked: ['push'], values: ['push'], proposed: ['push'], status: 'pending', note: '' },
-    ],
-    edits: [{ no: '共有', name: 'schema.sql', diff: '--- a/x\n+++ b/x\n@@ -1 +1 @@\n-```\n+x\n' }],
-    struck: [{ where: '1.1 · api/metrics.ts:40', name: 'track()' }],
-    comments: [{ where: '1', quote: '主張', text: 'なぜ?' }],
-  });
-  assert.match(md, /^# 回答: 計画$/m);
-  assert.match(md, /1\. \[1\.2\] 上限は\?\n {3}→ \*\*10件\*\* `10` \(変更。提案は 3件\)\n {3}> 一覧も欲しい\n {3}> 2行目/);
-  assert.match(md, /\(提案のまま確認\)/);
-  assert.match(md, /\(未確認。提案のまま\)/);
+const answer = {
+  title: '計画',
+  overall: '期限の扱いを先に決めたい',
+  asks: [
+    { id: 'limit', no: '1.2', q: '上限は?', picked: ['10件'], values: ['10'], proposed: ['3件'], status: 'changed', note: '一覧も欲しい\n2行目' },
+    { id: 'retry', no: '2', q: '再送は?', picked: ['しない'], values: ['none'], proposed: ['しない'], status: 'confirmed', note: '' },
+    { id: 'channel', no: '3', q: '経路は?', picked: ['push'], values: ['push'], proposed: ['push'], status: 'pending', note: '' },
+  ],
+  edits: [{ no: '共通', name: 'schema.sql', diff: '--- a/x\n+++ b/x\n@@ -1 +1 @@\n-```\n+x\n' }],
+  struck: [{ where: '1.1 · api/metrics.ts:40', name: 'track()' }],
+  comments: [{ where: '1', quote: '主張', text: 'なぜ?' }],
+};
+
+test('formatResponse: 次の動きと状況を先頭に置き、本文は全体→判断→編集→取り消し→コメントの順にする', () => {
+  const md = HP.formatResponse(answer, { verdict: 'revise' });
+  assert.ok(md.startsWith('# 回答: 計画\n次の動き: **計画を直して再提示する**\n状況: 判断 2/3 確認済み · 変更 1 · 編集 1 · 取り消し 1 · コメント 1\n\n## 全体\n> 期限の扱いを先に決めたい\n'));
+  assert.match(md, /- \*\*変更\*\* \[1\.2\] 上限は\? → \*\*10件\*\* `limit=10`\(提案は 3件\)\n {2}> 一覧も欲しい\n {2}> 2行目/);
+  assert.match(md, /- 提案どおり \[2\] 再送は\? → \*\*しない\*\* `retry=none`\n/);
+  assert.match(md, /- \*\*未確認\*\* \[3\] 経路は\? → \*\*push\*\* `channel=push`\(提案の案\)/);
   assert.match(md, /````diff\n[\s\S]*-```\n[\s\S]*````/, 'diff に ``` があれば fence を長くする');
   assert.match(md, /## 取り消し\n- \[1\.1 · api\/metrics\.ts:40\] `track\(\)`/);
   assert.match(md, /## コメント\n- \[1\] 主張\n {2}> なぜ\?/);
-  assert.match(md, /指示ではなく/);
+  assert.ok(md.indexOf('## 全体') < md.indexOf('## 判断') && md.indexOf('## 判断') < md.indexOf('## 編集') && md.indexOf('## 取り消し') < md.indexOf('## コメント'));
+  assert.match(md, /「>」の行と diff の中身は読み手の文章/);
+});
+
+test('formatResponse: 手編集の本文を使い、状況と注記で手編集を示す。次の動きが未指定なら確認を求める', () => {
+  const md = HP.formatResponse(answer, { body: '## 判断\n手で書いた\n', edited: true });
+  assert.match(md, /次の動き: \*\*未指定\(チャットで確認する\)\*\*/);
+  assert.match(md, /状況: .* · 手編集あり\n\n## 判断\n手で書いた\n/);
+  assert.match(md, /本文全体を読み手の文章として/);
+  assert.doesNotMatch(md, /## 全体/, '本文は手編集のものだけを使う');
+});
+
+test('formatBody: 指摘も判断もなければ空', () => {
+  assert.equal(HP.formatBody({ overall: '', asks: [], edits: [], struck: [], comments: [] }), '');
+});
+
+test('merge3: 別の行の変更は両方残る', () => {
+  const r = HP.merge3('a\nb\nc\nd\ne', 'A\nb\nc\nd\ne', 'a\nb\nc\nd\nE');
+  assert.deepEqual(r, { text: 'A\nb\nc\nd\nE', conflicts: [] });
+});
+test('merge3: 生成された行の直後に足した補足は衝突しない', () => {
+  const r = HP.merge3('q\n→ 3件\nz', 'q\n→ 3件\n> 補足\nz', 'q\n→ 10件\nz');
+  assert.deepEqual(r, { text: 'q\n→ 10件\n> 補足\nz', conflicts: [] });
+});
+test('merge3: 同じ行は手編集を残し、生成文を conflicts で返す', () => {
+  const r = HP.merge3('q\n→ 3件\nz', 'q\n→ 5件\nz', 'q\n→ 10件\nz');
+  assert.equal(r.text, 'q\n→ 5件\nz');
+  assert.deepEqual(r.conflicts, [{ mine: ['→ 5件'], theirs: ['→ 10件'] }]);
+});
+test('merge3: 手編集で消した行を生成側が変えると衝突する', () => {
+  const r = HP.merge3('q\n→ 3件\nz', 'q\nz', 'q\n→ 10件\nz');
+  assert.equal(r.text, 'q\nz');
+  assert.deepEqual(r.conflicts, [{ mine: [], theirs: ['→ 10件'] }]);
+});
+test('merge3: 両方が同じ変更なら衝突しない', () => {
+  assert.deepEqual(HP.merge3('a\nb', 'a\nB', 'a\nB'), { text: 'a\nB', conflicts: [] });
+});
+test('merge3: 同じ位置への別の挿入は、生成文・手編集の順で両方残る', () => {
+  assert.deepEqual(HP.merge3('a\nb', 'a\nM\nb', 'a\nT\nb'), { text: 'a\nT\nM\nb', conflicts: [] });
+});
+test('merge3: 片方だけの変更はそのまま採る', () => {
+  assert.equal(HP.merge3('a', 'a', 'b').text, 'b');
+  assert.equal(HP.merge3('a', 'b', 'a').text, 'b');
+});
+
+/* ── spring ── */
+// 運動方程式 m x'' = -k (x - 1) - c x' を RK4 で積分した値を、解析解と比べる
+const integrate = ({ stiffness: k, damping: c, mass: m }, until, dt = 1 / 4000) => {
+  let x = 0, v = 0; const out = [];
+  const a = (x0, v0) => (-k * (x0 - 1) - c * v0) / m;
+  for (let i = 0, n = Math.round(until / dt); i <= n; i++) {
+    out.push(x);
+    const k1x = v, k1v = a(x, v), k2x = v + dt / 2 * k1v, k2v = a(x + dt / 2 * k1x, v + dt / 2 * k1v);
+    const k3x = v + dt / 2 * k2v, k3v = a(x + dt / 2 * k2x, v + dt / 2 * k2v), k4x = v + dt * k3v, k4v = a(x + dt * k3x, v + dt * k3v);
+    x += dt / 6 * (k1x + 2 * k2x + 2 * k3x + k4x); v += dt / 6 * (k1v + 2 * k2v + 2 * k3v + k4v);
+  }
+  return out;
+};
+for (const [name, cfg] of Object.entries(HP.SPRINGS)) {
+  test(`spring ${name}: 解析解が数値積分と一致し、linear() が 0 で始まり 1 で終わる`, () => {
+    const s = HP.spring(cfg), xs = integrate(cfg, 1), dt = 1 / 4000;
+    xs.forEach((x, i) => { if (i % 40 === 0) assert.ok(Math.abs(s.at(i * dt) - x) < 1e-4, `t=${i * dt}`); });
+    const pts = s.easing.slice(7, -1).split(',').map(Number);
+    assert.equal(pts[0], 0); assert.equal(pts.at(-1), 1); assert.equal(pts.length, 41);
+    assert.ok(s.duration > 100 && s.duration < 900, `${s.duration}ms`);
+  });
+}
+test('spring: 減衰比どおりに、press と pop は行き過ぎ、panel と layout は行き過ぎない', () => {
+  const peak = (c) => { const s = HP.spring(c); let p = 0; for (let t = 0; t < 2; t += 0.001) p = Math.max(p, s.at(t)); return p; };
+  assert.ok(peak(HP.SPRINGS.pop) > 1.02, 'pop は少し行き過ぎる');
+  assert.ok(peak(HP.SPRINGS.press) > 1.001);
+  assert.ok(peak(HP.SPRINGS.panel) <= 1.0000001);
+  assert.ok(peak(HP.SPRINGS.layout) <= 1.0000001);
 });
 
 /* ── pack.mjs の lint ── */
@@ -206,4 +281,12 @@ test('pack: src の行と呼び出しの前後を file から埋め込む', (t) 
   assert.match(html, /data-excerpt="src\/a\.ts:10" data-start="4">\nconst l4 = 4;[\s\S]*const l16 = 16;\n<\/script>/);
   assert.match(html, /<style data-html-plan>/);
   assert.match(html, /<script data-html-plan>/);
+});
+
+test('plan.css: --mono は比例幅の和文書体より先に monospace を指定する', () => {
+  const css = readFileSync(resolve(skill, 'runtime/plan.css'), 'utf8');
+  const stack = css.match(/--mono:([^;]+);/)[1];
+  const generic = stack.search(/(^|,)\s*monospace\b/);
+  assert.ok(generic >= 0, stack);
+  assert.ok(generic < stack.indexOf('IBM Plex Sans JP'), stack);
 });

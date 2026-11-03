@@ -172,7 +172,7 @@ for (const b of blocksOf('hp-ask')) {
     if (t[0].startsWith('<hp-claim') || t[0].startsWith('</hp-claim')) {
       if (t[1]) { if (stack.length > 1) stack.pop(); else errors.push('</hp-claim> の対応する開始タグがない'); continue; }
       const a = attrs(t[2]); const n = { a, kids: [], ex: [], asks: [], claim: null, l: top.l + 1 };
-      n.no = a.kind === 'shared' ? '共有' : a.kind === 'scope' ? '対象外' : (top.no && !top.a.kind ? top.no + '.' : '') + (top.kids.filter((k) => !k.a.kind).length + 1);
+      n.no = a.kind === 'shared' ? '共通' : a.kind === 'scope' ? '対象外' : (top.no && !top.a.kind ? top.no + '.' : '') + (top.kids.filter((k) => !k.a.kind).length + 1);
       top.kids.push(n); stack.push(n); continue;
     }
     if (stack.length === 1) continue;
@@ -197,7 +197,7 @@ for (const b of blocksOf('hp-ask')) {
     n.kids.forEach(walk);
   };
   const tops = root.kids.filter((k) => !k.a.kind);
-  if (tops.length > 5) warns.push(`最上位の claim が ${tops.length} 個ある。5 個以内にする(共有と対象外は別に数える)`);
+  if (tops.length > 5) warns.push(`最上位の claim が ${tops.length} 個ある。5 個以内にする(共通と対象外は別に数える)`);
   if (root.kids.length && !root.kids.some((k) => k.a.kind === 'scope')) warns.push('kind="scope" の claim がない。変更しないものを最後に書く');
   const i = root.kids.findIndex((k) => k.a.kind); if (i >= 0 && root.kids.slice(i).some((k) => !k.a.kind)) warns.push('kind="shared" と kind="scope" の claim は最後に置く');
   root.kids.forEach(walk);
