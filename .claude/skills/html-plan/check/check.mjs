@@ -198,6 +198,9 @@ for (const width of [390, 768, 1280]) {
   await page.addScriptTag({ path: AXE });
   const axe = await page.evaluate(() => window.axe.run('.hp-composer', { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } }));
   axe.violations.forEach((v) => (['serious', 'critical'].includes(v.impact) ? errors : warns).push(`回答 axe ${v.id} (${v.impact}): ${v.help} — ${v.nodes.slice(0, 2).map((n) => n.target.join(' ')).join(' | ')}`));
+  // 入力のたびに衝突の欄を作り直さない(選択中の文字やフォーカスが消える)
+  const rebuilt = await page.evaluate(() => { const b = document.querySelector('.hp-conf button'); document.querySelector('.hp-overall').dispatchEvent(new Event('input', { bubbles: true })); return b !== document.querySelector('.hp-conf button'); });
+  if (rebuilt) fail('入力のたびに衝突の欄が作り直される');
   await page.click('.hp-conf button:has-text("ページでの変更を使う")'); await settle(page);
   if ((await body()).includes('手で書いた答え') || await page.locator('.hp-conf').count()) fail('「ページでの変更を使う」で衝突が解消しない');
   await page.click('.hp-revise'); await page.waitForFunction(() => window.__copied);
@@ -220,10 +223,15 @@ for (const width of [390, 768, 1280]) {
       : { canSendToClaude: async () => 'available', anchorFor: async () => 'a', sendToClaude: async (m) => { window.__sent.comment = m.text; } }) };
   });
   await s.page.reload(); await s.page.waitForSelector('html[data-hp-ready]');
-  await s.page.keyboard.press('r'); await settle(s.page); await s.page.waitForFunction(() => !document.querySelector('.hp-cmp-sub button:first-child').hidden);
-  await s.page.keyboard.press('Control+Enter'); await s.page.waitForFunction(() => window.__sent.comment);
+  // 広い画面ではシートが最初から出ている。r を押さなくても、表示中のボタンから送れる
+  await s.page.waitForFunction(() => !document.querySelector('.hp-cmp-sub button:first-child').hidden, null, { timeout: 3000 }).catch(() => errors.push('回答: 広い画面で開いただけでは送信できる状態にならない'));
+  // 入力欄の中の Ctrl+Enter では送らない
+  await s.page.focus('.hp-overall'); await s.page.keyboard.press('Control+Enter'); await s.page.waitForTimeout(300);
+  if (await s.page.evaluate(() => window.__sent.comment || window.__sent.path)) errors.push('回答: 入力欄の中の Ctrl+Enter で送信された');
+  await s.page.evaluate(() => { window.__sent = {}; });
+  await s.page.click('.hp-go'); await s.page.waitForFunction(() => window.__sent.comment, null, { timeout: 5000 }).catch(() => errors.push('回答: 広い画面のボタンから送信されない'));
   const sent = await s.page.evaluate(() => window.__sent);
-  if (sent.doc.verdict !== 'proceed' || !sent.doc.markdown.includes('次の動き: **実装に進める**') || !sent.comment.includes(sent.path) || !sent.comment.includes('次の動き')) errors.push('回答: 送信の db・コメントに次の動きが入らない');
+  if (sent.doc && (sent.doc.verdict !== 'proceed' || !sent.doc.markdown.includes('次の動き: **実装に進める**') || !sent.comment.includes(sent.path) || !sent.comment.includes('次の動き'))) errors.push('回答: 送信の db・コメントに次の動きが入らない');
   await s.ctx.close();
 
   // 狭い画面: 下のバーからシートを開く。閉じると答えた判断が畳まれる
@@ -285,12 +293,33 @@ for (const width of [390, 768, 1280]) {
   await page.waitForTimeout(2200); await page.click('.hp-tab[data-tab="body"]'); await page.waitForTimeout(500);
   const th = await page.evaluate(() => { const a = document.querySelector('.hp-tab-thumb').getBoundingClientRect(), b = document.querySelector('.hp-tab[aria-selected="true"]').getBoundingClientRect(); return Math.abs(a.left - b.left) + Math.abs(a.width - b.width); });
   if (th > 2) fail('タブの枠が選んだタブに重ならない');
+  // 畳み始めた判断を 110ms 以内に開き直しても、あとから畳まれない
+  await page.click('.hp-tab[data-tab="answer"]'); await page.waitForTimeout(400);
+  const reopened = await page.evaluate(async () => {
+    const fs = [...document.querySelectorAll('fieldset.hp-ask')], anchors = [...document.querySelectorAll('.hp-ask-anchor')];
+    const cur = fs.findIndex((f) => !f.hasAttribute('data-compact')), other = fs.findIndex((f) => f.hasAttribute('data-compact'));
+    fs[other].querySelector('.hp-ask-sum').click(); anchors[cur].click();
+    await new Promise((r) => setTimeout(r, 800));
+    const stuck = [...fs[cur].children].filter((k) => k.getClientRects().length && +getComputedStyle(k).opacity < 0.9).length;
+    return { open: !fs[cur].hasAttribute('data-compact'), count: fs.filter((f) => !f.hasAttribute('data-compact')).length, stuck };
+  });
+  if (!reopened.open || reopened.count !== 1) fail('畳み始めた判断を開き直すと、あとから畳まれる');
+  if (reopened.stuck) fail('開き直した判断の中身が透明のまま残る');
   // キーボードでは動かさない
   await page.click('.hp-tab[data-tab="answer"]'); await page.waitForTimeout(400);
   await page.evaluate(() => document.activeElement.blur()); await page.keyboard.press('n');
   if (await running()) fail('n で移るときに動く');
   logs.forEach((m) => errors.push(`動き: ${m}`));
   await ctx.close();
+
+  // 案の上で押して外で離したあとに矢印キーで選んでも、マウスの回答として次へ進まない
+  const dc = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
+  const dp = await dc.newPage(); await dp.goto(url); await dp.waitForSelector('html[data-hp-ready]'); await dp.waitForTimeout(900);
+  const lb = await dp.locator('fieldset.hp-ask:not([data-compact]) label.hp-opt').first().boundingBox();
+  await dp.mouse.move(lb.x + 40, lb.y + 10); await dp.mouse.down(); await dp.mouse.move(10, 10); await dp.mouse.up();
+  await dp.focus('fieldset.hp-ask:not([data-compact]) input:checked'); await dp.keyboard.press('ArrowDown'); await dp.waitForTimeout(700);
+  if (await dp.evaluate(() => document.querySelector('fieldset.hp-ask').hasAttribute('data-compact'))) fail('矢印キーで選んだのに次の判断へ進んだ');
+  await dc.close();
 
   // 狭い画面のシート: ボタンから広がり、閉じる動きを見せてから消える。色の覆いは途中まで残らない
   const nc = await browser.newContext({ viewport: { width: 900, height: 800 }, colorScheme: 'light', reducedMotion: 'no-preference' });

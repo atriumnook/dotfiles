@@ -157,18 +157,32 @@ test('merge3: 生成された行の直後に足した補足は衝突しない', 
 test('merge3: 同じ行は手編集を残し、生成文を conflicts で返す', () => {
   const r = HP.merge3('q\n→ 3件\nz', 'q\n→ 5件\nz', 'q\n→ 10件\nz');
   assert.equal(r.text, 'q\n→ 5件\nz');
-  assert.deepEqual(r.conflicts, [{ mine: ['→ 5件'], theirs: ['→ 10件'] }]);
+  assert.deepEqual(r.conflicts, [{ mine: ['→ 5件'], theirs: ['→ 10件'], at: 1 }]);
 });
 test('merge3: 手編集で消した行を生成側が変えると衝突する', () => {
   const r = HP.merge3('q\n→ 3件\nz', 'q\nz', 'q\n→ 10件\nz');
   assert.equal(r.text, 'q\nz');
-  assert.deepEqual(r.conflicts, [{ mine: [], theirs: ['→ 10件'] }]);
+  assert.deepEqual(r.conflicts, [{ mine: [], theirs: ['→ 10件'], at: 1 }]);
 });
 test('merge3: 両方が同じ変更なら衝突しない', () => {
   assert.deepEqual(HP.merge3('a\nb', 'a\nB', 'a\nB'), { text: 'a\nB', conflicts: [] });
 });
 test('merge3: 同じ位置への別の挿入は、生成文・手編集の順で両方残る', () => {
   assert.deepEqual(HP.merge3('a\nb', 'a\nM\nb', 'a\nT\nb'), { text: 'a\nT\nM\nb', conflicts: [] });
+});
+test('applyConflict: 同じ行が他にあっても、衝突した位置の行を置き換える', () => {
+  assert.equal(HP.applyConflict('x\na\nx\nb', { mine: ['x'], theirs: ['y'], at: 2 }), 'x\na\ny\nb');
+});
+test('applyConflict: 手編集が空行でも先頭に挿入しない', () => {
+  assert.equal(HP.applyConflict('a\n\nb', { mine: [''], theirs: ['y'], at: 1 }), 'a\ny\nb');
+});
+test('applyConflict: 複数行を置き換え、手編集で行が消えていれば変えない', () => {
+  assert.equal(HP.applyConflict('a\nb\nc', { mine: ['a', 'b'], theirs: ['z'], at: 0 }), 'z\nc');
+  assert.equal(HP.applyConflict('a\nc', { mine: ['b'], theirs: ['z'], at: 1 }), 'a\nc');
+});
+test('merge3 と applyConflict: 記録した位置で置き換えられる', () => {
+  const r = HP.merge3('x\nq\nz', 'x\nx\nz', 'x\nq2\nz');
+  assert.equal(HP.applyConflict(r.text, r.conflicts[0]), 'x\nq2\nz');
 });
 test('merge3: 片方だけの変更はそのまま採る', () => {
   assert.equal(HP.merge3('a', 'a', 'b').text, 'b');

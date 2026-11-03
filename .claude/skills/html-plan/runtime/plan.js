@@ -311,9 +311,9 @@ HP.merge3 = function merge3(base, mine, theirs) {
     out.push(...B.slice(pos, g.s));
     const sides = new Set(g.items.map((x) => x.side));
     if (sides.size === 2) {
-      const a = render(g, 'm'), b = render(g, 't');
+      const a = render(g, 'm'), b = render(g, 't'), at = out.length;
       out.push(...a);
-      if (a.join('\n') !== b.join('\n')) conflicts.push({ mine: a, theirs: b });
+      if (a.join('\n') !== b.join('\n')) conflicts.push({ mine: a, theirs: b, at });
     } else {
       const side = [...sides][0], lines = render(g, side);
       const dup = g.s === g.e && last && last.s === g.s && last.e === g.e && last.side !== side && last.text === lines.join('\n');
@@ -324,6 +324,17 @@ HP.merge3 = function merge3(base, mine, theirs) {
   }
   out.push(...B.slice(pos));
   return { text: out.join('\n'), conflicts };
+};
+// 衝突の手編集を生成文に置き換える。あとの編集で行がずれるので、記録した位置に最も近い一致を使う
+HP.applyConflict = function applyConflict(text, c) {
+  if (!c.mine.length) return text;
+  const L = text.split('\n'), at = c.at ?? 0; let best = -1;
+  for (let i = 0; i + c.mine.length <= L.length; i++) {
+    if (c.mine.every((l, j) => L[i + j] === l) && (best < 0 || Math.abs(i - at) < Math.abs(best - at))) best = i;
+  }
+  if (best < 0) return text;
+  L.splice(best, c.mine.length, ...c.theirs);
+  return L.join('\n');
 };
 
 if (!HAS_DOM) { globalThis.HtmlPlan = HP; return; }
@@ -435,8 +446,14 @@ function cascade(slot, text, withCheck) {
 }
 // 判断の畳み方。中身を短く消してから1行に替え、高さは同じ spring でつなぐ
 function foldAsk(a, compact) {
-  const fs = a.fs; if (fs.hasAttribute('data-compact') === compact) return;
-  clearTimeout(fs._foldT);
+  const fs = a.fs;
+  // 畳み始めの 110ms は data-compact がまだ付いていない。タイマーを止め、薄くした中身を戻す
+  const folding = fs._foldT != null;
+  if (folding) { clearTimeout(fs._foldT); fs._foldT = null; [...fs.children].forEach((k) => { if (k !== a.sumBtn) k.getAnimations().forEach((x) => x.cancel()); }); }
+  if (fs.hasAttribute('data-compact') === compact) {
+    if (folding) { const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = ''; if (live()) tweenHeight(fs, from, rectH(fs)); }
+    return;
+  }
   if (!live()) { tweens.get(fs)?.cancel(); fs.style.overflow = ''; fs.toggleAttribute('data-compact', compact); return; }
   const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = '';
   fs.toggleAttribute('data-compact', compact); const to = rectH(fs);
@@ -446,6 +463,7 @@ function foldAsk(a, compact) {
     tweenHeight(fs, from, to);
     kids.forEach((k) => k.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 110, easing: OUT, fill: 'forwards' }));
     fs._foldT = setTimeout(() => {
+      fs._foldT = null;
       fs.toggleAttribute('data-compact', true);
       kids.forEach((k) => k.getAnimations().forEach((x) => x.cancel()));
       a.sumBtn.animate(blurIn(6), SP.swap);
@@ -890,8 +908,6 @@ function renderWhy(el) {
   el.replaceChildren(det);
 }
 
-let pointerDown = false;
-if (HAS_DOM) { addEventListener('pointerdown', () => { pointerDown = true; }, true); addEventListener('pointerup', () => { pointerDown = false; }, true); }
 /* ── hp-ask: 判断。読み手が選び直すか「この案で確定」を押すまでは未確認 ── */
 function renderAsk(el, idx, total) {
   const id = el.id || `ask${idx + 1}`;
@@ -950,11 +966,8 @@ function renderAsk(el, idx, total) {
   // シートを閉じたあとに、答えた判断を畳む。開いているあいだは畳まない(コピーの演出と同時に動かさない)
   a.settle = () => { if (a.state() !== 'pending') a.fold(true); };
   // マウスで未確認の判断に答えたら、枠が滑り終わるのを見せてから次へ進む。提案の案をもう一度押すと確定になる
-  let byPointer = false;
-  opts.addEventListener('pointerdown', () => { byPointer = true; });
   opts.addEventListener('click', (e) => {
-    if (!e.target.matches('input') || !byPointer) return;
-    byPointer = false;
+    if (!e.target.matches('input') || modality !== 'pointer') return;
     const was = a.state();
     S.answers[id] = values(); S.confirmed[id] = true; save(); place(!live()); refresh();
     if (was === 'pending' && e.target.type === 'radio') { clearTimeout(a.adv); a.adv = setTimeout(() => nextAsk(a), 420); }
@@ -1038,22 +1051,7 @@ function refresh() {
   const respond = $('.hp-respond');
   respond?.classList.toggle('accent', !pend); respond?.classList.toggle('primary', !!pend);
   const next = $('.hp-next');
-  if (next && next.hidden !== !pend) {
-    const bar = next.parentElement;
-    if (!(live() && bar.offsetParent !== null && !pend)) next.hidden = !pend;
-    else {
-      // 「次の未確認」が消える分だけバーを縮め、回答のボタンを同じ spring で寄せる。最後の判断なので点を波打たせる
-      const w0 = bar.offsetWidth, nb = next.getBoundingClientRect(), br = bar.getBoundingClientRect();
-      const ghost = next.cloneNode(true); ghost.tabIndex = -1; ghost.setAttribute('aria-hidden', 'true'); ghost.style.cssText = `position:absolute;left:${nb.left - br.left}px;top:${nb.top - br.top}px;pointer-events:none`;
-      next.hidden = true; bar.append(ghost);
-      const w1 = bar.offsetWidth;
-      bar.style.overflow = 'clip';
-      bar.animate([{ width: `${w0}px` }, { width: `${w1}px` }], SP.layout).onfinish = () => { bar.style.overflow = ''; };
-      respond.animate([{ translate: `${w0 - w1}px 0` }, { translate: '0 0' }], SP.layout);
-      ghost.animate(blurOut(0, 3), EXIT).onfinish = () => ghost.remove();
-      $$('.hp-dot').forEach((d, i) => d.animate([{ scale: 1 }, { scale: 1.6 }, { scale: 1 }], { duration: 320, easing: OUT, delay: 80 + i * 50, pseudoElement: '::before' }));
-    }
-  }
+  if (next) next.hidden = !pend;
   document.documentElement.dataset.hpPending = String(pend);
   composerSync();
 }
@@ -1073,8 +1071,8 @@ function model() {
 }
 HP.model = model;
 // S.draft: 手編集の下書き。base は手編集の元にした生成文。判断などが変わると base・手編集・新しい生成文で merge する
-function syncDraft() {
-  const gen = HP.formatBody(model());
+function syncDraft(m = model()) {
+  const gen = HP.formatBody(m);
   if (!S.draft) return gen;
   if (S.draft.base !== gen) {
     const m = HP.merge3(S.draft.base, S.draft.text, gen);
@@ -1084,7 +1082,7 @@ function syncDraft() {
   if (S.draft.text === gen && !S.draft.conflicts.length) { S.draft = null; save(); return gen; }
   return S.draft.text;
 }
-HP.response = (verdict) => { const body = syncDraft(); return HP.formatResponse(model(), { verdict, body, edited: !!S.draft }); };
+HP.response = (verdict) => { const m = model(), body = syncDraft(m); return HP.formatResponse(m, { verdict, body, edited: !!S.draft }); };
 HP.markdown = () => HP.response();
 HP.expandAll = () => $$('hp-claim').forEach((c) => setOpen(c, true));
 HP.collapseAll = () => $$('hp-claim').forEach((c) => setOpen(c, false));
@@ -1156,12 +1154,12 @@ function buildDialogs() {
     btn.dataset.arm = ''; btn.textContent = label; act();
   }; };
   const render = () => {
-    const body = syncDraft();
+    const m = model(), body = syncDraft(m);
     if (out.value !== body) {
       const had = !panelB.hidden && out.value && document.activeElement !== out; out.value = body;
       if (had && live()) out.animate([{ backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--accent-soft') }, { backgroundColor: getComputedStyle(out).backgroundColor }], { duration: 500, easing: 'ease' });
     }
-    const m = model(); const pend = m.asks.filter((a) => a.status === 'pending').length;
+    const pend = m.asks.filter((a) => a.status === 'pending').length;
     let hand = '';
     if (S.draft) { const ops = HP.diffOps(S.draft.base, S.draft.text); hand = ` · 手編集 +${ops.filter((o) => o[0] === '+').length} −${ops.filter((o) => o[0] === '-').length} 行`; }
     sum.textContent = HP.formatHead(m, '', false).split('\n')[2].replace('状況: ', '') + hand;
@@ -1170,10 +1168,13 @@ function buildDialogs() {
     const keys = Object.keys(S.comments).filter((k) => targets.has(k));
     cwrap.hidden = !keys.length;
     clist.replaceChildren(...m.comments.map((c) => { const k = keys.find((x) => targets.get(x).where === c.where && S.comments[x] === c.text); return h('li', null, h('button', { type: 'button', class: 'hp-cl', onclick: () => { if (dlg.matches(':modal')) closePanel(); const t = targets.get(k); reveal(t.anchor); t.anchor.scrollIntoView({ block: 'center', behavior: live() ? 'smooth' : 'auto' }); } }, h('span', { class: 'w' }, c.where), h('span', { class: 't' }, c.text))); }));
-    const confs = S.draft?.conflicts || [], grew = confs.length > (conf._n || 0); conf._n = confs.length;
-    const fillConf = () => conf.replaceChildren(...confs.map((c, i) => {
+    const confs = S.draft?.conflicts || [], confKey = JSON.stringify(confs);
+    if (confKey === conf._key) return;
+    conf._key = confKey;
+    const grew = confs.length > (conf._n || 0); conf._n = confs.length;
+    const fillConf = () => conf.replaceChildren(...(S.draft?.conflicts || []).map((c, i) => {
       const drop = () => { S.draft.conflicts.splice(i, 1); save(); render(); };
-      const use = () => { S.draft.text = S.draft.text.replace(c.mine.join('\n'), () => c.theirs.join('\n')); drop(); };
+      const use = () => { S.draft.text = HP.applyConflict(S.draft.text, c); drop(); };
       return h('div', { class: 'hp-conf' },
         h('p', null, 'ページでの変更と手編集が同じ行を変更している。いまは手編集を残している。'),
         h('div', { class: 'hp-conf-side' }, h('b', null, '手編集'), h('pre', null, c.mine.join('\n') || '(手編集で消した)')),
@@ -1247,7 +1248,7 @@ function buildDialogs() {
   close.onclick = closePanel;
   dlg.addEventListener('cancel', (e) => { e.preventDefault(); closePanel(); });
   dlg.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); proceed.click(); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { if (e.target.matches('textarea')) return; e.preventDefault(); proceed.click(); }
     else if (e.key === 'Escape' && !dlg.matches(':modal')) { e.preventDefault(); document.activeElement?.blur?.(); }
   });
   dlg.addEventListener('close', () => {
@@ -1261,10 +1262,9 @@ function buildDialogs() {
   document.body.append(dlg);
   const help = h('dialog', { class: 'hp-dialog hp-help', 'aria-labelledby': 'hp-help-title' },
     h('h2', { id: 'hp-help-title' }, 'キーボード操作'),
-    h('dl', null, ...[['n', '次の未確認の判断へ'], ['1–9', '判断の選択肢を選ぶ'], ['Enter', '判断: この案で確定 / 呼び出し: コードを開く'], ['j / k', '次 / 前の claim へ'], ['c', 'フォーカス中の claim・行にコメント'], ['x', '呼び出しの変更を取り消す'], ['↑ ↓', 'コードと呼び出しの行を移動'], ['o / O', 'すべて開く / すべて閉じる'], ['r', '全体への指摘へ'], ['Ctrl+Enter', '回答: 実装に進める'], ['?', 'この一覧'], ['Esc', '閉じる']].flatMap(([k, v]) => [h('dt', null, h('kbd', null, k)), h('dd', null, v)])),
+    h('dl', null, ...[['n', '次の未確認の判断へ'], ['1–9', '判断の選択肢を選ぶ'], ['Enter', '判断: この案で確定 / 呼び出し: コードを開く'], ['j / k', '次 / 前の claim へ'], ['c', 'フォーカス中の claim・行にコメント'], ['x', '呼び出しの変更を取り消す'], ['↑ ↓', 'コードと呼び出しの行を移動'], ['o / O', 'すべて開く / すべて閉じる'], ['r', '全体への指摘へ'], ['Ctrl+Enter', '回答: 実装に進める(入力欄の中では働かない)'], ['?', 'この一覧'], ['Esc', '閉じる']].flatMap(([k, v]) => [h('dt', null, h('kbd', null, k)), h('dd', null, v)])),
     h('div', { class: 'hp-dlg-acts' }, h('span', { class: 'grow' }), h('button', { type: 'button', class: 'hp-btn', onclick: () => help.close() }, '閉じる')));
   document.body.append(help);
-  HP.closeRespond = closePanel;
   HP.showTab = showTab;
   // 広い画面では常に出しておく。show() は focus を奪うので open 属性で開く
   const mount = () => {
@@ -1272,8 +1272,17 @@ function buildDialogs() {
     else if (dlg.open) dlg.removeAttribute('open');
   };
   wideMq.addEventListener('change', mount);
+  const checkSend = async () => {
+    if (!CL) return;
+    try {
+      const v = await CL.comments.canSendToClaude();
+      sendable = v === 'available'; copyOnly.hidden = !sendable;
+      if (v === 'writers_only') status.textContent = '編集権限がないので Claude には送れない。下のボタンで回答をコピーしてください。';
+    } catch { sendable = false; }
+  };
+  HP.checkSend = checkSend;
   HP.openRespond = async (instant, keepFocus) => {
-    overall.value = S.overall || ''; copyOnly.hidden = true;
+    overall.value = S.overall || '';
     if (!wideMq.matches && !dlg.open) {
       returnTo = document.activeElement; status.textContent = '';
       render();
@@ -1283,8 +1292,7 @@ function buildDialogs() {
       if (animate) morphIn(trigger);
     }
     if (!keepFocus) { showTab('answer'); overall.focus({ preventScroll: true }); }
-    sendable = false;
-    if (CL) { try { const v = await CL.comments.canSendToClaude(); sendable = v === 'available'; copyOnly.hidden = !sendable; if (v === 'writers_only') status.textContent = '編集権限がないので Claude には送れない。「コピーで返す」を押してください。'; } catch {} }
+    await checkSend();
   };
   mount();
   showTab('answer');
@@ -1369,7 +1377,7 @@ function boot() {
   $$('details.hp-why', plan).forEach((d) => { d.open = true; });
   buildChrome(plan); buildDialogs(); keyboard();
   refresh();
-  connectClaude();
+  connectClaude().then(() => HP.checkSend());
   if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) setTimeout(() => go(t), 50); }
   if (!calm()) {
     [$('h1', plan), $('.hp-meta', plan), $('details.hp-why', plan), $('.hp-toc', plan), ...$$(':scope > hp-claim', plan)].filter(Boolean).slice(0, 7).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 8px' }, { opacity: 1, translate: '0 0' }], { duration: 300, easing: OUT, delay: i * 40, fill: 'backwards' }));
