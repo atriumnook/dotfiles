@@ -37,6 +37,14 @@ async function open(viewport, colorScheme = 'light') {
   return { ctx, page, logs };
 }
 const settle = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+// 動きが終わるまで待つ。起きないことの確認と、動きの途中の測定には使えないので、そこだけ固定の時間を待つ
+const quiet = async (page) => {
+  await settle(page);
+  await page.waitForFunction(() => !document.getAnimations().some((a) => a.playState === 'running'), null, { timeout: 5000 }).catch(async () => {
+    const names = await page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running').map((a) => a.animationName || a.transitionProperty || a.effect?.target?.className || '?'));
+    errors.push(`動き: 5秒たっても終わらない animation がある(${[...new Set(names)].join(', ')})`);
+  });
+};
 
 /* ── 見た目の検査 ── */
 for (const width of [390, 768, 1280]) {
@@ -234,6 +242,22 @@ for (const width of [390, 768, 1280]) {
   if (sent.doc && (sent.doc.verdict !== 'proceed' || !sent.doc.markdown.includes('次の動き: **実装に進める**') || !sent.comment.includes(sent.path) || !sent.comment.includes('次の動き'))) errors.push('回答: 送信の db・コメントに次の動きが入らない');
   await s.ctx.close();
 
+  // 幅 1100px をまたぐ: 広い画面では modal でなく常に出し、狭い画面では閉じてバーに戻す。書いた内容は残す
+  const w = await open({ width: 1280, height: 900 });
+  const sheet = () => w.page.evaluate(() => { const d = document.querySelector('.hp-composer'); return { open: d.open, modal: d.matches(':modal'), bar: !!document.querySelector('.hp-bar')?.getClientRects().length, overall: document.querySelector('.hp-overall').value, over: document.documentElement.scrollWidth > innerWidth + 1 }; });
+  await w.page.fill('.hp-overall', 'リサイズの前に書いた指摘');
+  await w.page.setViewportSize({ width: 900, height: 900 }); await settle(w.page);
+  let st = await sheet();
+  if (st.open || !st.bar || st.over) errors.push('リサイズ: 狭くしてもシートが閉じずバーに戻らない');
+  await w.page.keyboard.press('r'); await settle(w.page);
+  st = await sheet();
+  if (!st.modal || st.overall !== 'リサイズの前に書いた指摘') errors.push('リサイズ: 狭くしたあとのシートが modal でないか、書いた指摘が消えた');
+  await w.page.setViewportSize({ width: 1280, height: 900 }); await settle(w.page);
+  st = await sheet();
+  if (!st.open || st.modal || st.bar || st.over || st.overall !== 'リサイズの前に書いた指摘') errors.push('リサイズ: modal のまま広くすると、シートが常に出る状態に戻らない');
+  w.logs.forEach((m) => errors.push(`リサイズ: ${m}`));
+  await w.ctx.close();
+
   // 狭い画面: 下のバーからシートを開く。閉じると答えた判断が畳まれる
   const n = await open({ width: 390, height: 800 });
   if (await n.page.evaluate(() => document.querySelector('.hp-composer').open)) errors.push('回答: 狭い画面で最初からシートが開いている');
@@ -253,7 +277,7 @@ for (const width of [390, 768, 1280]) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
   const page = await ctx.newPage(); const logs = [];
   page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
-  await page.goto(url); await page.waitForSelector('html[data-hp-ready]'); await page.waitForTimeout(900);
+  await page.goto(url); await page.waitForSelector('html[data-hp-ready]'); await quiet(page);
   const fail = (m) => errors.push(`動き: ${m}`);
   const running = (p = page) => p.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && !(a instanceof CSSTransition)).length);
   await page.evaluate(() => window.HtmlPlan.collapseAll());
@@ -267,11 +291,11 @@ for (const width of [390, 768, 1280]) {
   tr = trace(650); await page.click(head); hs = await tr;
   const tail = hs.filter((x) => x > 0).at(-1) ?? 0;
   if (tail / to > 0.02) fail(`claim を閉じると最後に ${Math.round(tail)}px 飛ぶ`);
-  await page.waitForTimeout(100); await page.click(head); await page.waitForTimeout(600);
+  await quiet(page); await page.click(head); await quiet(page);
   tr = trace(650); await page.click(head); await page.waitForTimeout(110); await page.click(head); await page.waitForTimeout(90); await page.click(head); hs = await tr;
   jump = 0; for (let i = 1; i < hs.length; i++) jump = Math.max(jump, Math.abs(hs[i] - hs[i - 1]));
   if (jump / to > 0.3) fail(`途中で逆向きにすると1フレームで全高の ${Math.round(jump / to * 100)}% 飛ぶ`);
-  await page.waitForTimeout(600);
+  await quiet(page);
   const leftover = await page.evaluate(() => { const b = document.querySelector('hp-claim')._body; return { overflow: b.style.overflow, n: b.getAnimations().length }; });
   if (leftover.overflow || leftover.n) fail('claim の動きの後に overflow か animation が残る');
   // 案を押すと、枠が滑ってから次の判断が開き、左の計画がその claim へ動く
@@ -281,7 +305,8 @@ for (const width of [390, 768, 1280]) {
   const ind = await page.evaluate(() => { const f = document.querySelector('fieldset.hp-ask:not([data-compact])'), lb = f.querySelector('label.hp-opt:has(input:checked)'), i = f.querySelector('.hp-opt-ind'), a = i.getBoundingClientRect(), b = lb.getBoundingClientRect(); const top = document.elementFromPoint(b.left + b.width / 2, b.top + 10); return { dy: Math.abs(a.top - b.top), dh: Math.abs(a.height - b.height), label: !!top?.closest('label.hp-opt') }; });
   if (ind.dy > 1 || ind.dh > 1) fail('選択の枠が選んだ案に重ならない');
   if (!ind.label) fail('選択の枠が案の上に被さっている');
-  await page.waitForTimeout(900);
+  // 畳む前の timer とスクロールは animation に出ないので、次の判断の claim が画面に入るのを待つ
+  await page.waitForFunction(() => { const second = document.querySelectorAll('fieldset.hp-ask')[1], r = document.querySelector('.hp-ask-anchor[data-now]')?.getBoundingClientRect(), p = document.querySelector('hp-plan').getBoundingClientRect(); return second && !second.hasAttribute('data-compact') && r && r.top >= p.top && r.bottom <= p.bottom; }, null, { timeout: 3000 }).catch(() => {}); await quiet(page);
   const flow = await page.evaluate(() => { const fs = [...document.querySelectorAll('fieldset.hp-ask')]; const open = fs.filter((f) => !f.hasAttribute('data-compact')); const anchors = document.querySelectorAll('.hp-ask-anchor[data-now]'); const r = anchors[0]?.getBoundingClientRect(); const p = document.querySelector('hp-plan').getBoundingClientRect(); return { open: open.length, second: open[0] === fs[1], now: anchors.length, inView: r && r.top >= p.top && r.bottom <= p.bottom, top: document.querySelector('hp-plan').scrollTop }; });
   if (flow.open !== 1 || !flow.second) fail('案を押しても次の判断が開かない');
   if (flow.now !== 1 || !flow.inView) fail('開いた判断の claim が計画の画面内に来ない');
@@ -290,11 +315,11 @@ for (const width of [390, 768, 1280]) {
   await page.click('.hp-revise'); await page.waitForTimeout(250);
   if (await page.evaluate(() => document.querySelectorAll('fieldset.hp-ask:not([data-compact])').length) !== 1) fail('回答のボタンで判断が畳まれた');
   // タブの枠は選んだタブに重なる
-  await page.waitForTimeout(2200); await page.click('.hp-tab[data-tab="body"]'); await page.waitForTimeout(500);
+  await quiet(page); await page.click('.hp-tab[data-tab="body"]'); await quiet(page);
   const th = await page.evaluate(() => { const a = document.querySelector('.hp-tab-thumb').getBoundingClientRect(), b = document.querySelector('.hp-tab[aria-selected="true"]').getBoundingClientRect(); return Math.abs(a.left - b.left) + Math.abs(a.width - b.width); });
   if (th > 2) fail('タブの枠が選んだタブに重ならない');
   // 畳み始めた判断を 110ms 以内に開き直しても、あとから畳まれない
-  await page.click('.hp-tab[data-tab="answer"]'); await page.waitForTimeout(400);
+  await page.click('.hp-tab[data-tab="answer"]'); await quiet(page);
   const reopened = await page.evaluate(async () => {
     const fs = [...document.querySelectorAll('fieldset.hp-ask')], anchors = [...document.querySelectorAll('.hp-ask-anchor')];
     const cur = fs.findIndex((f) => !f.hasAttribute('data-compact')), other = fs.findIndex((f) => f.hasAttribute('data-compact'));
@@ -306,7 +331,7 @@ for (const width of [390, 768, 1280]) {
   if (!reopened.open || reopened.count !== 1) fail('畳み始めた判断を開き直すと、あとから畳まれる');
   if (reopened.stuck) fail('開き直した判断の中身が透明のまま残る');
   // キーボードでは動かさない
-  await page.click('.hp-tab[data-tab="answer"]'); await page.waitForTimeout(400);
+  await page.click('.hp-tab[data-tab="answer"]'); await quiet(page);
   await page.evaluate(() => document.activeElement.blur()); await page.keyboard.press('n');
   if (await running()) fail('n で移るときに動く');
   logs.forEach((m) => errors.push(`動き: ${m}`));
@@ -314,7 +339,7 @@ for (const width of [390, 768, 1280]) {
 
   // 案の上で押して外で離したあとに矢印キーで選んでも、マウスの回答として次へ進まない
   const dc = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
-  const dp = await dc.newPage(); await dp.goto(url); await dp.waitForSelector('html[data-hp-ready]'); await dp.waitForTimeout(900);
+  const dp = await dc.newPage(); await dp.goto(url); await dp.waitForSelector('html[data-hp-ready]'); await quiet(dp);
   const lb = await dp.locator('fieldset.hp-ask:not([data-compact]) label.hp-opt').first().boundingBox();
   await dp.mouse.move(lb.x + 40, lb.y + 10); await dp.mouse.down(); await dp.mouse.move(10, 10); await dp.mouse.up();
   await dp.focus('fieldset.hp-ask:not([data-compact]) input:checked'); await dp.keyboard.press('ArrowDown'); await dp.waitForTimeout(700);
@@ -323,17 +348,16 @@ for (const width of [390, 768, 1280]) {
 
   // 狭い画面のシート: ボタンから広がり、閉じる動きを見せてから消える。色の覆いは途中まで残らない
   const nc = await browser.newContext({ viewport: { width: 900, height: 800 }, colorScheme: 'light', reducedMotion: 'no-preference' });
-  const np = await nc.newPage(); await np.goto(url); await np.waitForSelector('html[data-hp-ready]'); await np.waitForTimeout(900);
+  const np = await nc.newPage(); await np.goto(url); await np.waitForSelector('html[data-hp-ready]'); await quiet(np);
   await np.click('.hp-respond');
   if (!(await running(np))) fail('マウスで開いたシートが動かない');
   await np.waitForTimeout(110);
   if (await np.evaluate(() => { const c = document.querySelector('.hp-cmp-cover'); return c && +getComputedStyle(c).opacity > 0.05; })) fail('シートが広がる途中で色の覆いが残る');
-  await np.waitForTimeout(650);
+  await quiet(np);
   if (await np.evaluate(() => getComputedStyle(document.querySelector('.hp-composer')).clipPath) !== 'none') fail('シートの clip-path が残る');
   await np.click('.hp-cmp-close');
   if (!(await np.evaluate(() => document.querySelector('.hp-composer').open))) fail('閉じる動きを待たずにシートが消える');
-  await np.waitForTimeout(350);
-  if (await np.evaluate(() => document.querySelector('.hp-composer').open)) fail('閉じる動きの後にシートが残る');
+  await np.waitForFunction(() => !document.querySelector('.hp-composer').open, null, { timeout: 3000 }).catch(() => fail('閉じる動きの後にシートが残る'));
   await np.keyboard.press('r');
   if (await running(np)) fail('r で開いたシートが動く');
   await np.keyboard.press('Escape');
