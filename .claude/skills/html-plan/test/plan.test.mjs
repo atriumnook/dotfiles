@@ -32,6 +32,13 @@ test('parseCalls: mark・字下げ・場所・注記を読み、空行で入口�
   assert.equal(m.rows[2].gapAfter, true);
 });
 
+test('statusLine と nextLine: formatHead の2行目と3行目に一致する', () => {
+  const r = { title: '計画', asks: [{ status: 'pending' }, { status: 'changed' }], edits: [], struck: [], comments: [] };
+  assert.equal(HP.statusLine(r, true), '状況: 判断 1/2 確認済み · 変更 1 · 手編集あり');
+  assert.equal(HP.nextLine('proceed'), '次の動き: **実装に進める**');
+  assert.equal(HP.formatHead(r, 'proceed', true), `# 回答: 計画\n${HP.nextLine('proceed')}\n${HP.statusLine(r, true)}\n`);
+});
+
 test('parseCalls: 2段以上深い字下げは error', () => {
   const m = HP.parseCalls('a()\n      b()');
   assert.equal(m.errors.length, 1);
