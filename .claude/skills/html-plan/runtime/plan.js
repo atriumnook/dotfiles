@@ -339,6 +339,11 @@ HP.applyConflict = function applyConflict(text, c) {
   return L.join('\n');
 };
 
+const fnv = (s) => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193); } return (x >>> 0).toString(36); };
+HP.askPrint = (q, options, defaults, claim) => fnv(JSON.stringify([q, options, defaults, claim]));
+// claim が変わった判断は読み直してもらう。コメントや全体への指摘は対応済みかもしれず、位置も変わるので引き継がない
+HP.carriedAnswer = (last, id, print) => (last?.asked?.[id] === print && last.confirmed?.[id] ? last.answers?.[id] ?? null : null);
+
 if (!HAS_DOM) { globalThis.HtmlPlan = HP; return; }
 window.HtmlPlan = HP;
 
@@ -479,14 +484,14 @@ function foldAsk(a, compact) {
 const srcOf = (el) => { const s = el.querySelector(':scope > script[type="text/plain"]'); return s ? s.textContent : [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join(''); };
 const claimOf = (el) => el.closest('hp-claim');
 const noOf = (el) => claimOf(el)?._no || '';
-const fnv = (s) => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193); } return (x >>> 0).toString(36); };
 
 /* ── 状態(localStorage に保存。読めない環境では保存しないだけで動く) ── */
-const S = { answers: {}, confirmed: {}, notes: {}, comments: {}, edits: {}, struck: {}, overall: '', draft: null };
-let KEY = '';
-function load() { try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {} }
+const S = { answers: {}, confirmed: {}, notes: {}, comments: {}, edits: {}, struck: {}, overall: '', draft: null, asked: {}, carried: 0 };
+let KEY = '', LATEST = '', prior = null;
+// この版の保存がなければ、同じ title で最後に保存した版を prior に読む(引き継ぐのは判断の回答だけ)
+function load() { try { const saved = localStorage.getItem(KEY); if (saved) Object.assign(S, JSON.parse(saved)); else prior = JSON.parse(localStorage.getItem(localStorage.getItem(LATEST) || '') || 'null'); } catch {} }
 let saveT = null;
-function flush() { clearTimeout(saveT); saveT = null; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
+function flush() { clearTimeout(saveT); saveT = null; try { localStorage.setItem(KEY, JSON.stringify(S)); localStorage.setItem(LATEST, KEY); } catch {} }
 function save() { clearTimeout(saveT); saveT = setTimeout(flush, 200); }
 // debounce 中に tab を閉じたり再読み込みしたりしても失わない
 if (HAS_DOM) { addEventListener('pagehide', () => { if (saveT) flush(); }); document.addEventListener('visibilitychange', () => { if (document.hidden && saveT) flush(); }); }
@@ -911,11 +916,14 @@ function renderWhy(el) {
 }
 
 /* ── hp-ask: 判断。読み手が選び直すか「この案で確定」を押すまでは未確認 ── */
-function renderAsk(el, idx, total) {
+function renderAsk(el, idx, total, claimSrc) {
   const id = el.id || `ask${idx + 1}`;
   const q = el.querySelector(':scope > p'); const qText = q ? q.textContent.trim() : (el.getAttribute('q') || '');
   const inputs = $$('input[type=radio], input[type=checkbox]', el);
   const defaults = inputs.filter((i) => i.hasAttribute('checked')).map((i) => i.value);
+  S.asked[id] = HP.askPrint(qText, inputs.map((i) => [i.value, i.closest('label')?.textContent.trim()]), defaults, claimSrc);
+  const carried = HP.carriedAnswer(prior, id, S.asked[id]);
+  if (carried) { S.answers[id] = carried; S.confirmed[id] = true; S.carried++; if (prior.notes?.[id]) S.notes[id] = prior.notes[id]; save(); }
   const fs = h('fieldset', { class: 'hp-ask' });
   const legend = h('legend', null, h('span', { class: 'hp-ask-no' }, `判断 ${idx + 1}/${total}`), h('span', { class: 'hp-ask-q', html: q ? q.innerHTML : esc(qText) }));
   fs.append(legend);
@@ -1165,7 +1173,7 @@ function buildDialogs() {
     let hand = '';
     if (S.draft) { const ops = HP.diffOps(S.draft.base, S.draft.text); hand = ` · 手編集 +${ops.filter((o) => o[0] === '+').length} −${ops.filter((o) => o[0] === '-').length} 行`; }
     sum.textContent = HP.statusLine(m, false).replace('状況: ', '') + hand;
-    warn.textContent = pend ? `未確認が ${pend} 件ある。このまま返すと、Claude が未確認の判断をチャットで確認する。` : '';
+    warn.textContent = [pend ? `未確認が ${pend} 件ある。このまま返すと、Claude が未確認の判断をチャットで確認する。` : '', S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継いだ。` : ''].filter(Boolean).join(' ');
     discard.hidden = !S.draft; editedDot.hidden = !S.draft;
     const keys = Object.keys(S.comments).filter((k) => targets.has(k));
     cwrap.hidden = !keys.length;
@@ -1260,7 +1268,7 @@ function buildDialogs() {
     const r = returnTo?.isConnected ? returnTo : $('.hp-respond'); r?.focus();
   });
   twoStep(discard, '手編集を捨てる', 'もう一度押すと捨てる', () => { S.draft = null; save(); render(); });
-  twoStep(reset, '回答を消去', 'もう一度押すと消去', () => { clearTimeout(saveT); saveT = null; try { localStorage.removeItem(KEY); } catch {} location.reload(); });
+  twoStep(reset, '回答を消去', 'もう一度押すと消去', () => { clearTimeout(saveT); saveT = null; try { localStorage.removeItem(KEY); localStorage.removeItem(LATEST); } catch {} location.reload(); });
   document.body.append(dlg);
   const help = h('dialog', { class: 'hp-dialog hp-help', 'aria-labelledby': 'hp-help-title' },
     h('h2', { id: 'hp-help-title' }, 'キーボード操作'),
@@ -1360,10 +1368,12 @@ function keyboard() {
 
 function boot() {
   const plan = $('hp-plan'); if (!plan) return;
-  KEY = 'html-plan:' + fnv(plan.innerHTML);
+  KEY = 'html-plan:' + fnv(plan.innerHTML); LATEST = 'html-plan:latest:' + fnv(document.title);
   load();
   if (!document.documentElement.lang) document.documentElement.lang = 'ja';
   Object.entries(SP).forEach(([k, v]) => { document.documentElement.style.setProperty(`--sp-${k}`, v.easing); document.documentElement.style.setProperty(`--sp-${k}-d`, `${v.duration}ms`); });
+  // renderAsk の前に他の部品が claim の中を書き換えるので、元の内容を先に控える
+  const claimSrc = new Map($$('hp-ask', plan).map((el) => [el, el.closest('hp-claim')?.innerHTML ?? '']));
   numberClaims(plan);
   $$('hp-why', plan).forEach(renderWhy);
   $$('hp-quote', plan).forEach(renderQuote);
@@ -1371,7 +1381,7 @@ function boot() {
   $$('hp-calls', plan).forEach(renderCalls);
   $$('hp-mock', plan).forEach(renderMock);
   $$('hp-machine', plan).forEach(renderMachine);
-  const askEls = $$('hp-ask', plan); askEls.forEach((el, i) => renderAsk(el, i, askEls.length));
+  const askEls = $$('hp-ask', plan); askEls.forEach((el, i) => renderAsk(el, i, askEls.length, claimSrc.get(el)));
   $$('hp-note', plan).forEach((n) => { n.setAttribute('role', 'note'); });
   $$('hp-claim', plan).forEach(renderClaim);
   Object.keys(S.comments).filter((k) => k.startsWith('c:')).forEach((k) => showCard(k, false));
