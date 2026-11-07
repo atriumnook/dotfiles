@@ -323,9 +323,6 @@ HP.applyConflict = function applyConflict(text, c) {
 };
 
 const fnv = (s) => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193); } return (x >>> 0).toString(36); };
-HP.askPrint = (q, options, defaults, claim) => fnv(JSON.stringify([q, options, defaults, claim]));
-// claim が変わった判断は読み直してもらう。コメントや全体への指摘は対応済みかもしれず、位置も変わるので引き継がない
-HP.carriedAnswer = (last, id, print) => (last?.asked?.[id] === print && last.confirmed?.[id] ? last.answers?.[id] ?? null : null);
 
 if (!HAS_DOM) { globalThis.HtmlPlan = HP; return; }
 window.HtmlPlan = HP;
@@ -484,12 +481,11 @@ const claimOf = (el) => el.closest('hp-claim');
 const noOf = (el) => claimOf(el)?._no || '';
 
 /* ── 状態(localStorage に保存。読めない環境では保存しないだけで動く) ── */
-const S = { answers: {}, confirmed: {}, notes: {}, comments: {}, edits: {}, struck: {}, overall: '', draft: null, asked: {}, carried: 0 };
-let KEY = '', LATEST = '', prior = null;
-// この版の保存がなければ、同じ title で最後に保存した版を prior に読む(引き継ぐのは判断の回答だけ)
-function load() { try { const saved = localStorage.getItem(KEY); if (saved) Object.assign(S, JSON.parse(saved)); else prior = JSON.parse(localStorage.getItem(localStorage.getItem(LATEST) || '') || 'null'); } catch {} }
+const S = { answers: {}, confirmed: {}, notes: {}, comments: {}, edits: {}, struck: {}, overall: '', draft: null };
+let KEY = '';
+function load() { try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch {} }
 let saveT = null;
-function flush() { clearTimeout(saveT); saveT = null; try { localStorage.setItem(KEY, JSON.stringify(S)); localStorage.setItem(LATEST, KEY); } catch {} }
+function flush() { clearTimeout(saveT); saveT = null; try { localStorage.setItem(KEY, JSON.stringify(S)); } catch {} }
 function save() { clearTimeout(saveT); saveT = setTimeout(flush, 200); }
 // debounce 中に tab を閉じたり再読み込みしたりしても失わない
 if (HAS_DOM) { addEventListener('pagehide', () => { if (saveT) flush(); }); document.addEventListener('visibilitychange', () => { if (document.hidden && saveT) flush(); }); }
@@ -986,14 +982,11 @@ function renderWhy(el) {
 }
 
 /* ── hp-ask: 判断。読み手が選び直すか「この案で確定」を押すまでは未回答 ── */
-function renderAsk(el, idx, total, claimSrc) {
+function renderAsk(el, idx, total) {
   const id = el.id || `ask${idx + 1}`;
   const q = el.querySelector(':scope > p'); const qText = q ? q.textContent.trim() : (el.getAttribute('q') || '');
   const inputs = $$('input[type=radio], input[type=checkbox]', el);
   const defaults = inputs.filter((i) => i.hasAttribute('checked')).map((i) => i.value);
-  S.asked[id] = HP.askPrint(qText, inputs.map((i) => [i.value, i.closest('label')?.textContent.trim()]), defaults, claimSrc);
-  const carried = HP.carriedAnswer(prior, id, S.asked[id]);
-  if (carried) { S.answers[id] = carried; S.confirmed[id] = true; S.carried++; if (prior.notes?.[id]) S.notes[id] = prior.notes[id]; save(); }
   const fs = h('fieldset', { class: 'hp-ask' });
   const legend = h('legend', null, h('span', { class: 'hp-ask-no' }, `判断 ${idx + 1}/${total}`), h('span', { class: 'hp-ask-q', html: q ? q.innerHTML : esc(qText) }));
   fs.append(legend);
@@ -1216,7 +1209,6 @@ const SEND_ERR = {
 function buildDialogs() {
   const status = h('p', { class: 'hp-dlg-status', role: 'status' });
   const sum = h('p', { class: 'hp-dlg-sum' });
-  const warn = h('p', { class: 'hp-dlg-warn' });
   const conf = h('div', { class: 'hp-dlg-conf' });
   const overall = h('textarea', { class: 'hp-field hp-overall', rows: '3', placeholder: '特定の箇所に付けられない指摘を書く' });
   const out = h('textarea', { class: 'hp-out', spellcheck: 'false' });
@@ -1245,7 +1237,7 @@ function buildDialogs() {
       h('div', { class: 'hp-cmp-title' }, h('h2', { id: 'hp-dlg-title' }, '回答'), asks.length ? seg : h('span', { class: 'grow' }), close), sum,
       h('div', { class: 'hp-tabs', role: 'tablist', 'aria-label': '回答の表示' }, thumb, tabA, tabB)),
     h('div', { class: 'hp-cmp-main' }, conf, panelA, panelB),
-    h('div', { class: 'hp-cmp-foot' }, warn, status,
+    h('div', { class: 'hp-cmp-foot' }, status,
       h('div', { class: 'hp-verdicts' }, revise, proceed),
       h('div', { class: 'hp-cmp-sub' }, copyOnly, h('span', { class: 'grow' }), discard, reset)));
   let sendable = false, returnTo = null;
@@ -1272,11 +1264,9 @@ function buildDialogs() {
       const had = !panelB.hidden && out.value && document.activeElement !== out; out.value = body;
       if (had && live()) out.animate([{ backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--accent-soft') }, { backgroundColor: getComputedStyle(out).backgroundColor }], { duration: 500, easing: 'ease' });
     }
-    const pend = m.asks.filter((a) => a.status === 'pending').length;
     let hand = '';
     if (S.draft) { const ops = HP.diffOps(S.draft.base, S.draft.text); hand = ` · 手編集 +${ops.filter((o) => o[0] === '+').length} −${ops.filter((o) => o[0] === '-').length} 行`; }
     sum.textContent = HP.statusLine(m, false).replace('状況: ', '') + hand;
-    warn.textContent = S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継ぎました。` : '';
     discard.hidden = !S.draft; editedDot.hidden = !S.draft;
     const keys = Object.keys(S.comments).filter((k) => targets.has(k));
     cwrap.hidden = !keys.length;
@@ -1371,7 +1361,7 @@ function buildDialogs() {
     const r = returnTo?.isConnected ? returnTo : $('.hp-respond'); r?.focus();
   });
   twoStep(discard, '手編集を捨てる', 'もう一度押すと捨てる', () => { S.draft = null; save(); render(); });
-  twoStep(reset, '回答を消去', 'もう一度押すと消去', () => { clearTimeout(saveT); saveT = null; try { localStorage.removeItem(KEY); localStorage.removeItem(LATEST); } catch {} location.reload(); });
+  twoStep(reset, '回答を消去', 'もう一度押すと消去', () => { clearTimeout(saveT); saveT = null; try { localStorage.removeItem(KEY); } catch {} location.reload(); });
   document.body.append(dlg);
   const help = h('dialog', { class: 'hp-dialog hp-help', 'aria-labelledby': 'hp-help-title' },
     h('h2', { id: 'hp-help-title' }, 'キーボード操作'),
@@ -1471,12 +1461,10 @@ function keyboard() {
 
 function boot() {
   const plan = $('hp-plan'); if (!plan) return;
-  KEY = 'html-plan:' + fnv(plan.innerHTML); LATEST = 'html-plan:latest:' + fnv(document.title);
+  KEY = 'html-plan:' + fnv(plan.innerHTML);
   load();
   if (!document.documentElement.lang) document.documentElement.lang = 'ja';
   Object.entries(SP).forEach(([k, v]) => { document.documentElement.style.setProperty(`--sp-${k}`, v.easing); document.documentElement.style.setProperty(`--sp-${k}-d`, `${v.duration}ms`); });
-  // renderAsk の前に他の部品が claim の中を書き換えるので、元の内容を先に控える
-  const claimSrc = new Map($$('hp-ask', plan).map((el) => [el, el.closest('hp-claim')?.innerHTML ?? '']));
   numberClaims(plan);
   $$('hp-why', plan).forEach(renderWhy);
   $$('hp-quote', plan).forEach(renderQuote);
@@ -1484,7 +1472,7 @@ function boot() {
   $$('hp-calls', plan).forEach(renderCalls);
   $$('hp-mock', plan).forEach(renderMock);
   $$('hp-machine', plan).forEach(renderMachine);
-  const askEls = $$('hp-ask', plan); askEls.forEach((el, i) => renderAsk(el, i, askEls.length, claimSrc.get(el)));
+  const askEls = $$('hp-ask', plan); askEls.forEach((el, i) => renderAsk(el, i, askEls.length));
   $$('hp-note', plan).forEach((n) => { n.setAttribute('role', 'note'); });
   $$('hp-claim', plan).forEach(renderClaim);
   Object.keys(S.comments).filter((k) => k.startsWith('c:')).forEach((k) => showCard(k, false));

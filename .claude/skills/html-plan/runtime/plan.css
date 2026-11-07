@@ -364,7 +364,6 @@ textarea.hp-out { flex: 1; min-height: 300px; padding: 12px; border: 0; border-r
 textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; background: var(--card); }
 .hp-cmp-foot { flex: none; padding: 12px 20px 14px; border-top: 1px solid var(--line-2); }
 .hp-dlg-status { margin: 0 0 8px; color: var(--ink-2); font-size: 13px; } .hp-dlg-status:empty { margin: 0; }
-.hp-dlg-warn { margin: 0 0 8px; color: var(--accent); font-size: 13px; font-weight: 500; } .hp-dlg-warn:empty { margin: 0; }
 .hp-verdicts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .hp-verdicts .hp-btn { min-height: 44px; padding-inline: 10px; }
 .hp-cmp-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 6px; }
