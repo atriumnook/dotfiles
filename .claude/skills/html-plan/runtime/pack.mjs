@@ -121,17 +121,9 @@ html = html.replace(/<(hp-calls)\b([^>]*)>([\s\S]*?)<\/hp-calls>/g, (whole, tag,
 });
 
 /* ── state machine ── */
-// 遷移の条件 [name=value] が指す判断の案(hp-ask の input の name と value)
-const choices = new Map();
-for (const a of blocksOf('hp-ask')) for (const m of a.inner.matchAll(/<input\b([^>]*)>/gi)) { const x = attrs(m[1]); if (x.name) { if (!choices.has(x.name)) choices.set(x.name, new Set()); choices.get(x.name).add(x.value); } }
 for (const b of blocksOf('hp-machine')) {
   const src = scriptOf(b.inner); if (src == null) { errors.push(`${b.at}: 本文を <script type="text/plain"> で囲む`); continue; }
   const m = HP.parseMachine(src); m.errors.concat(HP.checkMachine(m)).forEach((e) => errors.push(`${b.at}: ${e}`));
-  m.edges.filter((e) => e.when).forEach((e) => {
-    const vs = choices.get(e.when.name);
-    if (!vs) errors.push(`${b.at}: 遷移 ${e.from}->${e.to} の条件の判断 "${e.when.name}" がない。hp-ask の input の name を書く`);
-    else if (!vs.has(e.when.value)) errors.push(`${b.at}: 遷移 ${e.from}->${e.to} の条件の "${e.when.name}" に value "${e.when.value}" の案がない(${[...vs].join(', ')})`);
-  });
   if (m.order.length > 8) warns.push(`${b.at}: state が ${m.order.length} 個ある。8 個以内に分ける`);
   if (!m.grid.length && m.order.length > 3) warns.push(`${b.at}: 配置(| a | b | の行)がない。主な経路を上の段に、それ以外を下の段に置く`);
   const L = HP.layoutMachine(m);

@@ -423,5 +423,3 @@ textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .hp-mpin.hl { transform: scale(1.18); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) { .hp-mpin { transition: transform 160ms var(--ease-out), box-shadow 160ms ease; } }
 html[data-input="keyboard"] :is(.hp-row, .hp-row .hp-nm, .hp-row .hp-nm::after, .hp-mpin) { transition: none; }
-/* 状態図: 選ばれていない案の遷移は描かない(配置は残すので、ほかの線と状態は動かない) */
-:is(.hp-edge, .hp-elabel).off { visibility: hidden; }
