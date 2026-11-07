@@ -409,3 +409,20 @@ textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset:
 /* 判断の下の状態の行は画面に出さず、読み上げにだけ残す */
 .hp-ask-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .hp-ask-foot { justify-content: flex-end; }
+
+/* ── 図の動き ── */
+/* 状態図: 遷移をたどる点と、主な経路の再生 */
+.hp-mc-dot { fill: var(--accent); pointer-events: none; }
+.hp-mc-tools { display: flex; justify-content: flex-end; padding: 0 14px 8px; }
+/* 呼び出しの木: 取り消し線は文字の高さの中心に引く(行の高さの半分は、文字の領域の中心と一致する) */
+.hp-row.struck .hp-nm { text-decoration: none; }
+.hp-row .hp-nm { position: relative; }
+.hp-row .hp-nm::after { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - 1px); height: 2px; background: currentColor; transform: scaleX(0); transform-origin: left; pointer-events: none; }
+.hp-row.struck .hp-nm::after { transform: scaleX(1); }
+@media (prefers-reduced-motion: no-preference) { .hp-row .hp-nm::after { transition: transform 160ms var(--ease-out); } .hp-row, .hp-row .hp-nm { transition: opacity 150ms ease; } }
+/* mock の番号と注記 */
+.hp-plegend li { border-radius: var(--r-sm); transition: background-color 150ms ease; }
+.hp-plegend li.hl { background: var(--accent-soft); }
+.hp-mpin.hl { transform: scale(1.18); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) { .hp-mpin { transition: transform 160ms var(--ease-out), box-shadow 160ms ease; } }
+html[data-input="keyboard"] :is(.hp-row, .hp-row .hp-nm, .hp-row .hp-nm::after, .hp-mpin) { transition: none; }

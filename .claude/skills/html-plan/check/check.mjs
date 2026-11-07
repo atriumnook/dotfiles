@@ -459,6 +459,68 @@ for (const width of [390, 768, 1280]) {
   await r.ctx.close();
 }
 
+/* ── 図の動き: 状態図は実際にある遷移だけを点でたどり、画面はちらつかない。取り消しは深さの順に及ぶ。番号と注記は連動する ── */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
+  const page = await ctx.newPage(); const logs = [];
+  page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
+  await page.goto(url); await page.waitForSelector('html[data-hp-ready]'); await quiet(page);
+  await page.evaluate(() => window.HtmlPlan.expandAll()); await quiet(page);
+  const fail = (m) => errors.push(`図: ${m}`);
+  const mc = page.locator('figure.hp-machine').first();
+  if (await mc.count()) {
+    await mc.scrollIntoViewIfNeeded(); await quiet(page);
+    const now = () => mc.evaluate((f) => f.querySelector('.hp-st[aria-pressed="true"]')?.dataset.id);
+    const dotMoving = () => mc.evaluate((f) => f.querySelector('.hp-mc-dot')?.getAnimations().length > 0);
+    const start = await now();
+    await mc.locator('.hp-mc-outs button').first().click();
+    if (!(await dotMoving())) fail('「次:」を押しても、点が遷移の線をたどらない');
+    if (await mc.evaluate((f) => [...f.querySelectorAll('.hp-mc-screen > [data-state]')].some((s) => s.getAnimations().length))) fail('状態を変えると、下の画面の中身が動く(ちらつく)');
+    await quiet(page);
+    if ((await now()) === start) fail('点がたどったあとに状態が変わらない');
+    // 直接の遷移がない状態を押したときは、ない遷移を見せない
+    const back = await mc.evaluate((f, id) => !f.querySelector(`.hp-edge[data-from="${f.querySelector('.hp-st[aria-pressed="true"]').dataset.id}"][data-to="${id}"]`), start);
+    if (back) { await mc.locator(`.hp-st[data-id="${start}"]`).click(); if (await dotMoving()) fail('直接の遷移がない状態を押しても、点が線をたどる'); await quiet(page); if ((await now()) !== start) fail('状態を押しても、その状態に移らない'); }
+    // キーボードで押したときは動かさない
+    await mc.locator('.hp-mc-outs button').first().focus(); await page.keyboard.press('Enter');
+    if (await dotMoving()) fail('キーボードで遷移を押すと点が動く');
+    await quiet(page);
+    // 主な経路の再生: 押したときだけ一度たどって止まる。再生中に押すと止まる
+    const play = mc.locator('.hp-mc-play');
+    if (await play.count()) {
+      await play.click(); let saw = false;
+      for (let i = 0; i < 40 && (await play.textContent()) !== '主な経路を再生'; i++) { if (await dotMoving()) saw = true; await page.waitForTimeout(100); }
+      if (!saw) fail('「主な経路を再生」で点が動かない');
+      if ((await play.textContent()) !== '主な経路を再生') fail('「主な経路を再生」が終わっても止まらない');
+      await play.click(); await page.waitForTimeout(150); await play.click(); await quiet(page);
+      const stopped = await now(); await page.waitForTimeout(1200);
+      if ((await now()) !== stopped || await dotMoving()) fail('再生中に押しても止まらない');
+    } else fail('上の段が遷移でつながっているのに「主な経路を再生」が出ない');
+  }
+  // 呼び出しの木: 取り消し線が引かれ、子孫は深さの順に遅れて薄くなる
+  const parent = await page.evaluate(() => { const rows = [...document.querySelectorAll('.hp-row')]; const i = rows.findIndex((r, k) => r.dataset.mark && r.querySelector('.hp-strike') && rows[k + 1] && +rows[k + 1].style.getPropertyValue('--d') > +r.style.getPropertyValue('--d')); if (i < 0) return -1; rows[i].dataset.checkRow = '1'; rows[i].scrollIntoView({ block: 'center' }); return i; });
+  if (parent >= 0) {
+    const row = page.locator('.hp-row[data-check-row]'); await row.hover(); await row.locator('.hp-strike').click();
+    const st = await page.evaluate(() => ({ line: document.getAnimations().some((a) => a instanceof CSSTransition && a.effect.pseudoElement === '::after' && a.transitionProperty === 'transform'), delays: [...document.querySelectorAll('.hp-row.under-struck')].map((r) => ({ d: +r.style.getPropertyValue('--d'), ms: parseFloat(getComputedStyle(r).transitionDelay) * 1000 })).sort((a, b) => a.d - b.d) }));
+    if (!st.line) fail('取り消し線が引かれる動きがない');
+    // 深い行ほど遅れる(同じ深さは同じ遅れ)。DOM の並び順ではなく深さで比べる
+    const bad = !st.delays.length || st.delays[0].ms < 50 || st.delays.some((x, i) => i && (x.d === st.delays[i - 1].d ? x.ms !== st.delays[i - 1].ms : x.ms <= st.delays[i - 1].ms));
+    if (bad) fail(`取り消しの子孫が深さの順に薄くならない(${st.delays.map((x) => `深さ${x.d}:${x.ms}ms`).join(', ')})`);
+    await quiet(page); await row.locator('.hp-strike').click(); await quiet(page);
+  }
+  // mock の番号と注記: マウスを載せたときとキーボードで入ったときに連動する
+  const li = page.locator('.hp-plegend li').first();
+  if (await li.count()) {
+    const hl = () => li.evaluate((l) => l.closest('figure').querySelector('.hp-mpin').classList.contains('hl'));
+    await li.scrollIntoViewIfNeeded(); await li.hover();
+    if (!(await hl())) fail('注記の行にマウスを載せても、mock の番号が強調されない');
+    await page.mouse.move(2, 2); await li.locator('button').first().focus();
+    if (!(await hl())) fail('キーボードで注記の行に入っても、mock の番号が強調されない');
+  }
+  logs.forEach((m) => errors.push(`図: ${m}`));
+  await ctx.close();
+}
+
 await browser.close();
 writeFileSync(resolve(out, 'report.json'), JSON.stringify({ errors, warns }, null, 2));
 warns.forEach((m) => console.log('  ⚠ ' + m));

@@ -47,7 +47,7 @@ claim の最初の子は claim を書いた `<p>`(中で `<code>` と `<b>` を�
 - **要点を示す最小の範囲を描く。** カード1枚、menu 1つ、行1つを、`w` 480 以下で描く。スマートフォンでも読める。画面全体は概観だけにし、そのときは `thumbnail` を付ける。
 - 中は普通の HTML。補助の class: `.ui`(余白)`.row` `.col` `.grow` `.muted` `.small` `.btn` `.btn.pri` `.card` `.input` `.menu`(子の `.on` が選択中)`.badge`。複数の mock で同じ CSS を使うときは、ページに `<style data-mock-shared>…</style>` を1つ置く。
 - terminal の枠は暗い mono の面で、`.dim .g .r .y .b` と `<b>` を使える。
-- `data-ref="名前"` の要素に `<hp-pin ref="名前">` で番号を付ける。`anchor="tr|tl|br|bl|r|l|c"` で角を選ぶ(既定は `tr`)。要素がないときは `at="x%,y%"`。pin の `title` は要点の数語、本文は省いてよい。pin は mock の下に番号付きの一覧として出て、一覧の各行にコメントできる。
+- `data-ref="名前"` の要素に `<hp-pin ref="名前">` で番号を付ける。`anchor="tr|tl|br|bl|r|l|c"` で角を選ぶ(既定は `tr`)。要素がないときは `at="x%,y%"`。pin の `title` は要点の数語、本文は省いてよい。pin は mock の下に番号付きの一覧として出て、一覧の各行にコメントできる。一覧の行と mock の番号は、マウスを載せると互いに強調される。
 - 文字が出力の振る舞い(CLI、log、生成される file)は、terminal の mock か、出力の `hp-code` にする。
 
 ## `hp-machine` — lifecycle を、state ごとの画面と一緒に示す
@@ -77,7 +77,7 @@ sending   -> failed  : エラー
 - **`| a | b | . |` の行で state を並べる。** 1行が1段で、`.` は空き。主な経路を上の段に、それ以外を下に置く。配置がないと3列ずつ自動で並べ、遷移が交差しやすい。
 - `a -> b : ラベル`。ラベルはキー・code・2語程度。行頭の `+` は提案で増える遷移(緑の破線)、`-` はなくなる遷移(赤の破線)。判断で増減する遷移には `+` を付ける。machine 全体が新しいなら mark は付けない。
 - 線が別の state を横切るときは曲線で迂回し、ラベルは state・他のラベル・線を避けて置く。自己遷移は描けないので、state の説明に書く。
-- 読み手には、図・現在の state の説明・次に行ける遷移・その state の画面(`data-state` に id を空白区切りで並べた div)が見える。state を押す(または focus して Enter)と移る。
+- 読み手には、図・現在の state の説明・次に行ける遷移・その state の画面(`data-state` に id を空白区切りで並べた div)が見える。state か「次:」の遷移を押す(または focus して Enter)と移る。今の state から直接の遷移があれば、点が線をたどる。上の段の state が遷移でつながっていれば「主な経路を再生」が出て、押すと一度だけたどる。
 - pack は、到達できない state、final でない行き止まり、配置の漏れを error にする。state は8個まで。
 
 ## `hp-calls` — 何が変わるかを呼び出しの木で示す

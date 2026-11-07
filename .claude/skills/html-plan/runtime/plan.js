@@ -362,6 +362,7 @@ const SP = {
   close: { duration: 220, easing: DRAWER },    // 閉じるときの高さと透明。開くより短く、1フレームで全高の3割を超えて動かない長さ
   panel: { duration: 250, easing: OUT },    // 回答のシート
   move: { duration: 200, easing: IN_OUT },  // 選択の枠と tab の下線の移動
+  trip: { duration: 320, easing: IN_OUT },  // 状態図の遷移をたどる点。説明のための動きなので UI より少し長い
 };
 const EXIT = { duration: 160, easing: OUT };
 let modality = 'pointer';
@@ -764,6 +765,8 @@ function paintStrikes() {
     [...list.querySelectorAll('.hp-row')].forEach((row) => {
       const d = +row.style.getPropertyValue('--d');
       if (cut >= 0 && d <= cut) cut = -1;
+      // 取り消しが下へ及ぶ様子を、深さの順に 30ms ずつずらして見せる(全体で 300ms 未満)
+      row.style.transitionDelay = cut >= 0 && live() ? `${Math.min(120, 60 + (d - cut - 1) * 30)}ms` : '';
       row.classList.toggle('under-struck', cut >= 0);
       if (cut < 0 && row.classList.contains('struck')) cut = d;
     });
@@ -805,33 +808,65 @@ function renderMachine(el) {
     g.append(svgEl('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 10 }));
     if (st.final) g.append(svgEl('rect', { class: 'inner', x: b.x + 3, y: b.y + 3, width: b.w - 6, height: b.h - 6, rx: 7 }));
     const t = svgEl('text', { x: b.x + b.w / 2, y: b.y + b.h / 2 + 4.5, 'text-anchor': 'middle' }); t.textContent = b.id; g.append(t);
-    g.addEventListener('click', () => setState(b.id));
+    g.addEventListener('click', () => pick(b.id));
     g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setState(b.id); } });
     gStates.append(g); stateEls[b.id] = g;
   });
-  svg.append(gEdges, gStates, gLabels);
+  const dot = svgEl('circle', { class: 'hp-mc-dot', r: 4.5, cx: -99, cy: -99, 'aria-hidden': 'true' });
+  svg.append(gEdges, gStates, gLabels, dot);
   const scroller = h('div', { class: 'hp-mc-scroll' }, svg);
   const screens = $$(':scope > [data-state]', el);
   const panelHead = h('div', { class: 'hp-mc-now' }); const screenBox = h('div', { class: 'hp-mc-screen' });
   screens.forEach((s) => screenBox.append(s));
   const panel = h('div', { class: 'hp-mc-panel', 'aria-live': 'polite' }, panelHead, screenBox);
-  fig.append(scroller, panel);
+  // 上の段の状態が遷移でつながっていれば、押したときだけ一度たどる。自動では動かさない(読む邪魔になり、見ている状態が勝手に変わる)
+  const top = (m.grid[0] || []).filter((id) => id && id !== '.' && m.states[id]);
+  const route = top.slice(1).map((id, i) => m.edges.find((e) => e.from === top[i] && e.to === id && e.mark !== '-'));
+  let run = 0;
+  const play = top.length > 1 && route.every(Boolean) ? h('button', { type: 'button', class: 'hp-btn small hp-mc-play' }, '主な経路を再生') : null;
+  function stop() { run++; if (play) { delete play.dataset.on; play.textContent = '主な経路を再生'; } }
+  if (play) play.onclick = async () => {
+    if (play.dataset.on) { stop(); trip?.finish(); return; }
+    const me = ++run; play.dataset.on = '1'; play.textContent = '止める'; trip?.finish(); setState(top[0]);
+    for (const e of route) { await new Promise((r) => setTimeout(r, 400)); if (run !== me) return; await travel(e); if (run !== me) return; }
+    stop();
+  };
+  fig.append(scroller, ...(play ? [h('div', { class: 'hp-mc-tools' }, play)] : []), panel);
+  // 実際にある遷移をたどったときだけ、点を線の上で進める。ない遷移を見せない。曲線は ease-in-out の値をそのまま使う
+  let cur = null, trip = null;
+  function travel(e) {
+    trip?.finish();
+    return new Promise((done) => {
+      const p = svg.querySelector(`.hp-edge[data-from="${CSS.escape(e.from)}"][data-to="${CSS.escape(e.to)}"] path`);
+      if (!live() || !p) { setState(e.to); done(); return; }
+      const len = p.getTotalLength(), clock = dot.animate([{ opacity: 1 }, { opacity: 1 }], SP.trip); let raf = 0;
+      const end = () => { cancelAnimationFrame(raf); clock.cancel(); dot.setAttribute('cx', -99); dot.setAttribute('cy', -99); trip = null; setState(e.to); done(); };
+      trip = { finish: end };
+      stateEls[cur]?.classList.remove('on');
+      const f = () => { const k = clock.effect.getComputedTiming().progress ?? 1; const q = p.getPointAtLength(len * k); dot.setAttribute('cx', q.x); dot.setAttribute('cy', q.y); raf = requestAnimationFrame(f); };
+      f(); clock.onfinish = end;
+    });
+  }
+  // 状態を押したとき: 今の状態からの直接の遷移が1本だけならたどる。それ以外は線をたどらずに切り替える
+  function pick(id) { stop(); trip?.finish(); if (id === cur) return; const es = m.edges.filter((e) => e.from === cur && e.to === id && e.mark !== '-'); if (es.length === 1) travel(es[0]); else setState(id); }
   const legend = [];
   if (m.edges.some((e) => e.mark === '+')) legend.push(h('span', { class: 'hp-leg add' }, '破線(緑)は提案で増える遷移'));
   if (m.edges.some((e) => e.mark === '-')) legend.push(h('span', { class: 'hp-leg del' }, '破線(赤)はなくなる遷移'));
   const cap = el.getAttribute('caption');
   if (cap || legend.length) fig.append(h('div', { class: 'hp-caption' }, cap || '', ...legend));
   el.replaceChildren(fig);
-  function setState(id) {
-    if (!m.states[id]) return; const st = m.states[id];
+  function setState(id, first = false) {
+    if (!m.states[id]) return; const st = m.states[id]; cur = id;
     Object.entries(stateEls).forEach(([k, g]) => { g.classList.toggle('on', k === id); g.setAttribute('aria-pressed', String(k === id)); });
     $$('.hp-edge, .hp-elabel', svg).forEach((g) => g.classList.toggle('out', g.dataset.from === id));
     const outs = m.edges.filter((e) => e.from === id && e.mark !== '-');
     fill(panelHead, h('code', null, id), st.final ? h('span', { class: 'hp-tag' }, '終了') : null, st.desc ? h('span', null, st.desc) : null,
-      outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => { setState(e.to); stateEls[e.to].focus(); } }, `${e.label || e.to} → ${e.to}`))) : null);
-    screens.forEach((s) => { const show = s.dataset.state.split(/[\s,]+/).includes(id), was = !s.hidden; s.hidden = !show; if (show && !was && live()) s.animate(blurIn(6), SP.swap); else if (show && !was && softly()) s.animate(FADE, SOFT); });
+      outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => { stop(); travel(e).then(() => stateEls[e.to].focus({ preventScroll: true })); } }, `${e.label || e.to} → ${e.to}`))) : null);
+    // 画面の中身は一瞬で入れ替え、欄の高さだけを滑らかに変える。中身を透明から出すと、入れ替わる間に一瞬なにも映らずちらつく
+    const swap = () => screens.forEach((s) => { s.hidden = !s.dataset.state.split(/[\s,]+/).includes(id); });
+    if (first) swap(); else reflow(screenBox, swap);
   }
-  setState(m.initial);
+  setState(m.initial, true);
 }
 
 /* ── hp-mock: 実際の HTML を shadow root で描き、欄の幅に合わせて縮小する ── */
@@ -859,15 +894,20 @@ function renderMock(el) {
   const inner = root.querySelector('.root');
   const pins = $$(':scope > hp-pin', el).map((p, i) => ({ i: i + 1, ref: p.getAttribute('ref'), at: p.getAttribute('at'), anchor: p.getAttribute('anchor') || 'tr', title: p.getAttribute('title') || '', html: p.innerHTML }));
   const marks = pins.map((p) => { const b = h('span', { class: 'hp-mpin', 'aria-hidden': 'true' }, String(p.i)); stage.append(b); return b; });
+  const lis = [];
   if (pins.length) {
     const ol = h('ol', { class: 'hp-plegend' });
     pins.forEach((p) => {
       const pk = `p:${key}:${p.i}`;
       const li = h('li', null, h('span', { class: 'n', 'aria-hidden': 'true' }, String(p.i)), h('span', { class: 'b' }, h('b', null, p.title), p.html.trim() ? h('span', { html: ' ' + p.html }) : null), commentButton(pk, `注記 ${p.i}`));
-      ol.append(li);
+      ol.append(li); lis.push(li);
       registerTarget(pk, { where: `${no} · 注記 ${p.i}`, quote: p.title, anchor: li, place: (card) => li.append(card) });
     });
     fig.append(ol);
+    // 注記の行と mock の番号を、マウスを載せたときとキーボードで入ったときに互いに強調する
+    const link = (i, on) => { marks[i].classList.toggle('hl', on); lis[i].classList.toggle('hl', on); };
+    lis.forEach((li, i) => { li.addEventListener('mouseenter', () => link(i, true)); li.addEventListener('mouseleave', () => link(i, false)); li.addEventListener('focusin', () => link(i, true)); li.addEventListener('focusout', () => link(i, false)); });
+    marks.forEach((b, i) => { b.addEventListener('mouseenter', () => link(i, true)); b.addEventListener('mouseleave', () => link(i, false)); });
   }
   if (el.getAttribute('caption')) fig.append(h('div', { class: 'hp-caption' }, el.getAttribute('caption')));
   el.replaceChildren(fig);
