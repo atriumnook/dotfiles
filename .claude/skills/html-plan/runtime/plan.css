@@ -68,7 +68,7 @@ ul, ol { margin: 0 0 12px; padding-left: 1.4em; }
   .hp-btn, .hp-cbtn, .hp-dot, .hp-seg-b, .hp-ask-sum, .hp-ask-anchor, .hp-toc-b { transition: transform var(--sp-press-d, 160ms) var(--sp-press, var(--ease-out)), background-color 150ms ease, box-shadow 150ms ease, color 150ms ease; }
   :is(.hp-btn, .hp-cbtn, .hp-dot):active:not(:disabled), .hp-ask-sum:active, .hp-ask-anchor:active { transform: scale(.97); transition-duration: 80ms, 150ms, 150ms, 150ms; transition-timing-function: var(--ease-out), ease, ease, ease; }
   .hp-toggle .hp-i svg { transition: transform var(--sp-pop-d, 160ms) var(--sp-pop, var(--ease-out)); }
-  .hp-opt-ind, .hp-tab-thumb { transition: translate var(--sp-layout-d, 200ms) var(--sp-layout, var(--ease-out)), height var(--sp-layout-d, 200ms) var(--sp-layout, var(--ease-out)), width var(--sp-layout-d, 200ms) var(--sp-layout, var(--ease-out)); }
+  .hp-opt-ind, .hp-tab-thumb { transition: translate var(--sp-move-d, 200ms) var(--sp-move, var(--ease-out)), height var(--sp-move-d, 200ms) var(--sp-move, var(--ease-out)), width var(--sp-move-d, 200ms) var(--sp-move, var(--ease-out)); }
   label.hp-opt input[type="radio"] { transition: box-shadow var(--sp-press-d, 160ms) var(--sp-press, var(--ease-out)); }
   fieldset.hp-ask { transition: box-shadow 200ms ease, background-color 200ms ease; }
   hp-claim[data-linked] { transition: background-color 240ms ease; }
@@ -336,7 +336,7 @@ body:has(dialog.hp-composer:modal) .hp-bar { display: none; }
 .hp-seg-b { position: relative; flex: 1; height: 24px; padding: 0; border: 0; border-radius: 0; background: none; cursor: pointer; }
 .hp-seg-b::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px; border-radius: 0; background: var(--sunk); box-shadow: inset 0 0 0 1px var(--line-2); }
 .hp-seg-b::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 5px; margin-top: -2.5px; border-radius: 0; background: var(--ink); transform: scaleX(0); transform-origin: left; }
-@media (prefers-reduced-motion: no-preference) { .hp-seg-b::after { transition: transform var(--sp-layout-d, 200ms) var(--sp-layout, var(--ease-out)), background-color 180ms ease; } }
+@media (prefers-reduced-motion: no-preference) { .hp-seg-b::after { transition: transform var(--sp-move-d, 200ms) var(--sp-move, var(--ease-out)), background-color 180ms ease; } }
 .hp-seg-b:is([data-state="confirmed"], [data-state="changed"])::after { transform: scaleX(1); }
 .hp-seg-b[data-state="changed"]::after { background: repeating-linear-gradient(90deg, var(--changed) 0 3px, transparent 3px 5px); }
 .hp-seg-b[data-now]::before { background: var(--accent); box-shadow: none; }

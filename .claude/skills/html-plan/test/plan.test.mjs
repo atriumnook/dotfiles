@@ -207,36 +207,6 @@ test('merge3: 片方だけの変更はそのまま採る', () => {
   assert.equal(HP.merge3('a', 'b', 'a').text, 'b');
 });
 
-/* ── spring ── */
-// 運動方程式 m x'' = -k (x - 1) - c x' を RK4 で積分した値を、解析解と比べる
-const integrate = ({ stiffness: k, damping: c, mass: m }, until, dt = 1 / 4000) => {
-  let x = 0, v = 0; const out = [];
-  const a = (x0, v0) => (-k * (x0 - 1) - c * v0) / m;
-  for (let i = 0, n = Math.round(until / dt); i <= n; i++) {
-    out.push(x);
-    const k1x = v, k1v = a(x, v), k2x = v + dt / 2 * k1v, k2v = a(x + dt / 2 * k1x, v + dt / 2 * k1v);
-    const k3x = v + dt / 2 * k2v, k3v = a(x + dt / 2 * k2x, v + dt / 2 * k2v), k4x = v + dt * k3v, k4v = a(x + dt * k3x, v + dt * k3v);
-    x += dt / 6 * (k1x + 2 * k2x + 2 * k3x + k4x); v += dt / 6 * (k1v + 2 * k2v + 2 * k3v + k4v);
-  }
-  return out;
-};
-for (const [name, cfg] of Object.entries(HP.SPRINGS)) {
-  test(`spring ${name}: 解析解が数値積分と一致し、linear() が 0 で始まり 1 で終わる`, () => {
-    const s = HP.spring(cfg), xs = integrate(cfg, 1), dt = 1 / 4000;
-    xs.forEach((x, i) => { if (i % 40 === 0) assert.ok(Math.abs(s.at(i * dt) - x) < 1e-4, `t=${i * dt}`); });
-    const pts = s.easing.slice(7, -1).split(',').map(Number);
-    assert.equal(pts[0], 0); assert.equal(pts.at(-1), 1); assert.equal(pts.length, 41);
-    assert.ok(s.duration > 100 && s.duration < 900, `${s.duration}ms`);
-  });
-}
-test('spring: 減衰比どおりに、press と pop は行き過ぎ、panel と layout は行き過ぎない', () => {
-  const peak = (c) => { const s = HP.spring(c); let p = 0; for (let t = 0; t < 2; t += 0.001) p = Math.max(p, s.at(t)); return p; };
-  assert.ok(peak(HP.SPRINGS.pop) > 1.02, 'pop は少し行き過ぎる');
-  assert.ok(peak(HP.SPRINGS.press) > 1.001);
-  assert.ok(peak(HP.SPRINGS.panel) <= 1.0000001);
-  assert.ok(peak(HP.SPRINGS.layout) <= 1.0000001);
-});
-
 /* ── pack.mjs の lint ── */
 const pack = (file, ...args) => {
   try { return { code: 0, out: execFileSync(process.execPath, [resolve(skill, 'runtime/pack.mjs'), file, '--lint-only', ...args], { encoding: 'utf8' }) }; }

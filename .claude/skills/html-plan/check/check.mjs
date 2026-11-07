@@ -342,6 +342,11 @@ for (const width of [390, 768, 1280]) {
   tr = trace(650); await page.click(head); hs = await tr;
   const tail = hs.filter((x) => x > 0).at(-1) ?? 0;
   if (tail / to > 0.02) fail(`claim を閉じると最後に ${Math.round(tail)}px 飛ぶ`);
+  // 閉じる途中で中身が見え直さない(透明になった中身の不透明度が、縮みきる前に戻らない)
+  await page.click(head); await quiet(page);
+  const rebound = page.evaluate(() => new Promise((res) => { const el = document.querySelector('hp-claim')._body; const t0 = performance.now(); let prev = 1, up = 0; const f = () => { const o = +getComputedStyle(el).opacity; if (!el.hidden && el.getBoundingClientRect().height > 1 && o > prev + 0.05) up++; prev = o; if (performance.now() - t0 < 650) requestAnimationFrame(f); else res(up); }; requestAnimationFrame(f); }));
+  await page.click(head);
+  if (await rebound) fail('claim を閉じる途中で、透明になった中身が見え直す(ちらつく)');
   await quiet(page); await page.click(head); await quiet(page);
   tr = trace(650); await page.click(head); await page.waitForTimeout(110); await page.click(head); await page.waitForTimeout(90); await page.click(head); hs = await tr;
   jump = 0; for (let i = 1; i < hs.length; i++) jump = Math.max(jump, Math.abs(hs[i] - hs[i - 1]));

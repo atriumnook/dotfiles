@@ -181,28 +181,6 @@ HP.layoutMachine = function layoutMachine(m, measure) {
   return { boxes, edges, minX: f(minX), minY: f(minY), W: Math.ceil(Math.max(...xs) + PAD - minX), H: Math.ceil(Math.max(...ys) + PAD - minY) };
 };
 
-/* ── spring: 物理を解いて CSS の linear() にする。依存なしで spring の曲線を使う ── */
-HP.spring = function spring({ stiffness: k, damping: c, mass: m = 1 }) {
-  const w0 = Math.sqrt(k / m), z = c / (2 * Math.sqrt(k * m));
-  const at = (t) => {
-    if (z < 1) { const wd = w0 * Math.sqrt(1 - z * z); return 1 - Math.exp(-z * w0 * t) * (Math.cos(wd * t) + (z * w0 / wd) * Math.sin(wd * t)); }
-    if (z === 1) return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
-    const s = w0 * Math.sqrt(z * z - 1), a = -z * w0 + s, b = -z * w0 - s;
-    return 1 - (b * Math.exp(a * t) - a * Math.exp(b * t)) / (b - a);
-  };
-  let end = 0;
-  for (let t = 0; t < 3; t += 1 / 240) if (Math.abs(1 - at(t)) > 0.002) end = t;   // 最後に ±0.2% の外にいた時刻
-  const n = 40, pts = Array.from({ length: n + 1 }, (_, i) => (i === n ? 1 : +at(end * i / n).toFixed(4)));
-  return { at, duration: Math.round(end * 1000), easing: `linear(${pts.join(',')})` };
-};
-// BeUI の lib/ease.ts の値(MIT)。press はボタンの押下、swap は文字の入れ替え、panel は drawer、layout は高さと位置の変化
-HP.SPRINGS = {
-  press: { stiffness: 500, damping: 30, mass: 0.6 },
-  swap: { stiffness: 460, damping: 30, mass: 0.55 },
-  panel: { stiffness: 420, damping: 40, mass: 0.5 },
-  layout: { stiffness: 360, damping: 32, mass: 0.6 },
-  pop: { stiffness: 224, damping: 21.5, mass: 1 },   // { visualDuration: 0.42, bounce: 0.28 } 相当。chevron と点
-};
 
 /* ── 行単位の差分(LCS)。編集された schema / code を unified diff で返す ── */
 HP.diffOps = function diffOps(a, b) {
@@ -372,9 +350,19 @@ const ICON = {
 const icon = (n) => h('span', { class: 'hp-i', 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[n]}</svg>` });
 /* ── motion ──
    頻度で決める: キーボードの操作は動かさない。reduced motion では動きを止め、色と透明度だけ残す。
-   入るときは spring + blur + 移動、出るときは 140〜180ms で短く。高さと位置は瞬間移動させない。 */
-const SP = {}; Object.entries(HP.SPRINGS).forEach(([k, v]) => { const s = HP.spring(v); SP[k] = { duration: s.duration, easing: s.easing }; });
-const OUT = 'cubic-bezier(.23, 1, .32, 1)';
+   指で引く操作がないので spring は使わない。出入りと開閉は ease-out、画面の上での移動は ease-in-out にする。
+   UI の動きは 300ms 未満にし、閉じる・出る動きは開く・入る動きより短くする。高さと位置は瞬間移動させない。 */
+// 高さは drawer の曲線にする。ease-out は動き出しが速く、高い中身では最初の1フレームで全高の3割以上動いて跳んで見える
+const OUT = 'cubic-bezier(.23, 1, .32, 1)', IN_OUT = 'cubic-bezier(.77, 0, .175, 1)', DRAWER = 'cubic-bezier(.32, .72, 0, 1)';
+const SP = {
+  press: { duration: 160, easing: OUT },    // ボタンの押下
+  pop: { duration: 160, easing: OUT },      // chevron の回転と状態の印
+  swap: { duration: 200, easing: OUT },     // 中身の入れ替え
+  layout: { duration: 250, easing: DRAWER },   // 開くときの高さ
+  close: { duration: 220, easing: DRAWER },    // 閉じるときの高さと透明。開くより短く、1フレームで全高の3割を超えて動かない長さ
+  panel: { duration: 250, easing: OUT },    // 回答のシート
+  move: { duration: 200, easing: IN_OUT },  // 選択の枠と tab の下線の移動
+};
 const EXIT = { duration: 160, easing: OUT };
 let modality = 'pointer';
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -422,7 +410,7 @@ function collapse(el, done) {
   const box = boxOf(el);
   el.style.overflow = 'clip'; el.style.pointerEvents = 'none';
   const fade = el.animate(blurOut(), { ...EXIT, fill: 'forwards' });
-  el.animate([box, zeroBox], { ...SP.layout, fill: 'forwards' }).onfinish = (e) => { done(); e.target.cancel(); fade.cancel(); el.style.overflow = ''; el.style.pointerEvents = ''; el._leaving = false; };
+  el.animate([box, zeroBox], { ...SP.close, fill: 'forwards' }).onfinish = (e) => { done(); e.target.cancel(); fade.cancel(); el.style.overflow = ''; el.style.pointerEvents = ''; el._leaving = false; };
 }
 const leave = (el) => collapse(el, () => el.remove());
 function roll(el, text, dir = 1) {
@@ -576,21 +564,26 @@ function renderClaim(c, idx) {
   c._toggle = toggle; c._body = body; c._head = head;
   registerTarget(key, { where: c._no, quote: text.textContent.trim(), anchor: toggle, place: (card) => head.after(card) });
 }
+// 閉じるときの透明は、高さが縮みきって hidden にするまで保つ。保たないと、縮む途中で中身が見え直してちらつく
+const fades = new WeakMap();
 function setOpen(c, open, animated = false) {
   if (!c._body) return;
   const b = c._body;
   c._toggle.setAttribute('aria-expanded', String(open)); c.classList.toggle('open', open);
-  if (!animated) { tweens.get(b)?.cancel(); b.style.overflow = ''; b.hidden = !open; return; }
-  const closed = b.hidden, from = closed ? 0 : rectH(b);
-  tweens.get(b)?.cancel(); b.style.overflow = ''; b.hidden = false;
+  if (!animated) { tweens.get(b)?.cancel(); fades.get(b)?.cancel(); b.style.overflow = ''; b.hidden = !open; return; }
+  const closed = b.hidden, from = closed ? 0 : rectH(b), op = closed ? '0' : getComputedStyle(b).opacity;
+  // 動いている途中で逆向きにしたときは ease-in-out で静止から動かす。ease-out だと最速で逆へ動き出して跳ぶ
+  const turn = tweens.has(b) ? { easing: IN_OUT } : {};
+  tweens.get(b)?.cancel(); fades.get(b)?.cancel(); b.style.overflow = ''; b.hidden = false;
   if (open) {
     $$('hp-mock', b).forEach((m) => m._fit?.());   // mock の高さは ResizeObserver で後から決まる。測る前に確定させる
-    tweenHeight(b, from, rectH(b));
-    b.animate([{ opacity: closed ? 0 : getComputedStyle(b).opacity }, { opacity: 1 }], { duration: 180, easing: OUT });
-    if (closed) [...b.children].slice(0, 5).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }], { duration: 260, easing: OUT, delay: i * 35, fill: 'backwards' }));
+    tweenHeight(b, from, rectH(b), { ...SP.layout, ...turn });
+    b.animate([{ opacity: op }, { opacity: 1 }], SP.layout);
+    // 子は 30ms ずつずらし、全体を 300ms 未満に収める
+    if (closed) [...b.children].slice(0, 4).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }], { ...SP.layout, delay: i * 30, fill: 'backwards' }));
   } else {
-    b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: OUT });
-    tweenHeight(b, from, 0, SP.layout, () => { b.hidden = true; });
+    fades.set(b, b.animate([{ opacity: op }, { opacity: 0 }], { ...SP.close, fill: 'forwards' }));
+    tweenHeight(b, from, 0, { ...SP.close, ...turn }, () => { b.hidden = true; fades.get(b)?.cancel(); });
   }
 }
 function reveal(el) { for (let c = claimOf(el); c; c = claimOf(c.parentElement)) setOpen(c, true); }
@@ -1056,7 +1049,7 @@ function refresh() {
   $$('.hp-dot').forEach((d, i) => {
     const st = asks[i].state(), was = d.dataset.state; d.dataset.state = st;
     const lb = `判断 ${asks[i].label}: ${HP.STATUS[st]}`; d.setAttribute('aria-label', lb); d.title = lb;
-    if (was && was !== st && live()) d.animate([{ scale: 0.4 }, { scale: 1 }], { ...SP.pop, pseudoElement: '::before' });
+    if (was && was !== st && live()) d.animate([{ scale: 0.6 }, { scale: 1 }], { ...SP.pop, pseudoElement: '::before' });
   });
   const respond = $('.hp-respond');
   respond?.classList.toggle('accent', !pend); respond?.classList.toggle('primary', !!pend);
@@ -1246,7 +1239,7 @@ function buildDialogs() {
     const cover = h('div', { class: 'hp-cmp-cover', 'aria-hidden': 'true', style: `background:${a.color}` }); dlg.append(cover);
     dlg.animate([{ clipPath: a.clip, translate: a.move }, { clipPath: FULL, translate: '0 0' }], SP.panel);
     cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 70, easing: OUT }).onfinish = () => cover.remove();   // 広がる途中で色の塊に見えないよう、先に消す
-    kids.forEach((k, i) => k.animate(blurIn(10), { ...SP.swap, delay: 70 + i * 40, fill: 'backwards' }));
+    kids.forEach((k, i) => k.animate(blurIn(10), { ...SP.swap, delay: 40 + i * 30, fill: 'backwards' }));
   };
   const closePanel = () => {
     if (!dlg.matches(':modal') || dlg._closing) return;
