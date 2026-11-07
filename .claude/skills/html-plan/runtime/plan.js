@@ -74,7 +74,12 @@ HP.parseMachine = function parseMachine(text) {
       m.states[s[1]] = { id: s[1], desc: (s[3] || '').trim(), initial: /initial/.test(s[2]), final: /final/.test(s[2]) }; m.order.push(s[1]); return;
     }
     if (line.startsWith('|')) { m.grid.push(line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim()).map((c) => (c === '.' || !c ? null : c))); return; }
-    if ((s = line.match(/^([+-])?\s*([\w-]+)\s*->\s*([\w-]+)\s*(?::\s*(.*))?$/))) { m.edges.push({ mark: s[1] || ' ', from: s[2], to: s[3], label: (s[4] || '').trim(), ln }); return; }
+    // 行の末尾の [name=value] は条件。+ はその案のときだけある遷移、- はその案でなくなる遷移
+    if ((s = line.match(/^([+-])?\s*([\w-]+)\s*->\s*([\w-]+)\s*(?::\s*(.*?))?\s*(?:\[\s*([\w-]+)\s*=\s*([^\]\s]+)\s*\])?$/))) {
+      const when = s[5] ? { name: s[5], value: s[6] } : null;
+      if (when && !s[1]) m.errors.push(`${ln} 行: 条件 [${when.name}=${when.value}] を書く遷移には、+(その案で増える)か -(その案でなくなる)を付ける`);
+      m.edges.push({ mark: s[1] || ' ', from: s[2], to: s[3], label: (s[4] || '').trim(), when, ln }); return;
+    }
     m.errors.push(`${ln} 行: 解釈できない — "${line}"`);
   });
   m.edges.forEach((e) => {
@@ -774,6 +779,12 @@ function paintStrikes() {
 }
 
 /* ── hp-machine ── */
+// 判断が変わるたびに、条件付きの遷移を出し入れする(refresh から呼ぶ)
+const machineHooks = [];
+// 判断 name で選ばれている value
+const chosen = (name) => asks.find((a) => a.inputs.some((i) => i.name === name))?.values() || [];
+// 遷移が今あるか。条件がなければ「-」以外はある。条件があれば、選ばれた案に合わせる
+const alive = (e) => (e.when ? (chosen(e.when.name).includes(e.when.value) ? e.mark === '+' : e.mark === '-') : e.mark !== '-');
 let measureCtx = null;
 function measure(s, px) {
   measureCtx = measureCtx || document.createElement('canvas').getContext('2d');
@@ -792,12 +803,12 @@ function renderMachine(el) {
   L.edges.forEach((e) => {
     const g = svgEl('g', { class: 'hp-edge', 'data-from': e.from, 'data-to': e.to, 'data-mark': e.mark });
     g.append(svgEl('path', { d: e.d }), svgEl('polygon', { points: e.head.map((p) => p.join(',')).join(' ') }));
-    gEdges.append(g);
+    gEdges.append(g); e.g = [g];
     if (e.lbox) {
       const lg = svgEl('g', { class: 'hp-elabel', 'data-from': e.from, 'data-to': e.to, 'data-mark': e.mark });
       lg.append(svgEl('rect', { x: e.lbox.x, y: e.lbox.y, width: e.lbox.w, height: e.lbox.h, rx: 5 }));
       const t = svgEl('text', { x: e.lbox.x + e.lbox.w / 2, y: e.lbox.y + e.lbox.h / 2 + 4, 'text-anchor': 'middle' }); t.textContent = e.label; lg.append(t);
-      gLabels.append(lg);
+      gLabels.append(lg); e.g.push(lg);
     }
   });
   const stateEls = {};
@@ -821,14 +832,15 @@ function renderMachine(el) {
   const panel = h('div', { class: 'hp-mc-panel', 'aria-live': 'polite' }, panelHead, screenBox);
   // 上の段の状態が遷移でつながっていれば、押したときだけ一度たどる。自動では動かさない(読む邪魔になり、見ている状態が勝手に変わる)
   const top = (m.grid[0] || []).filter((id) => id && id !== '.' && m.states[id]);
-  const route = top.slice(1).map((id, i) => m.edges.find((e) => e.from === top[i] && e.to === id && e.mark !== '-'));
+  const routeOf = (ok) => top.slice(1).map((id, i) => m.edges.find((e) => e.from === top[i] && e.to === id && ok(e)));
+  const route = routeOf((e) => e.mark !== '-' || e.when);
   let run = 0;
   const play = top.length > 1 && route.every(Boolean) ? h('button', { type: 'button', class: 'hp-btn small hp-mc-play' }, '主な経路を再生') : null;
   function stop() { run++; if (play) { delete play.dataset.on; play.textContent = '主な経路を再生'; } }
   if (play) play.onclick = async () => {
     if (play.dataset.on) { stop(); trip?.finish(); return; }
     const me = ++run; play.dataset.on = '1'; play.textContent = '止める'; trip?.finish(); setState(top[0]);
-    for (const e of route) { await new Promise((r) => setTimeout(r, 400)); if (run !== me) return; await travel(e); if (run !== me) return; }
+    for (const e of routeOf(alive)) { if (!e) break; await new Promise((r) => setTimeout(r, 400)); if (run !== me) return; await travel(e); if (run !== me) return; }
     stop();
   };
   fig.append(scroller, ...(play ? [h('div', { class: 'hp-mc-tools' }, play)] : []), panel);
@@ -848,10 +860,11 @@ function renderMachine(el) {
     });
   }
   // 状態を押したとき: 今の状態からの直接の遷移が1本だけならたどる。それ以外は線をたどらずに切り替える
-  function pick(id) { stop(); trip?.finish(); if (id === cur) return; const es = m.edges.filter((e) => e.from === cur && e.to === id && e.mark !== '-'); if (es.length === 1) travel(es[0]); else setState(id); }
+  function pick(id) { stop(); trip?.finish(); if (id === cur) return; const es = m.edges.filter((e) => e.from === cur && e.to === id && alive(e)); if (es.length === 1) travel(es[0]); else setState(id); }
   const legend = [];
   if (m.edges.some((e) => e.mark === '+')) legend.push(h('span', { class: 'hp-leg add' }, '破線(緑)は提案で増える遷移'));
   if (m.edges.some((e) => e.mark === '-')) legend.push(h('span', { class: 'hp-leg del' }, '破線(赤)はなくなる遷移'));
+  if (m.edges.some((e) => e.when)) legend.push(h('span', { class: 'hp-leg' }, '判断の案に合わせて出入りする遷移がある'));
   const cap = el.getAttribute('caption');
   if (cap || legend.length) fig.append(h('div', { class: 'hp-caption' }, cap || '', ...legend));
   el.replaceChildren(fig);
@@ -859,7 +872,7 @@ function renderMachine(el) {
     if (!m.states[id]) return; const st = m.states[id]; cur = id;
     Object.entries(stateEls).forEach(([k, g]) => { g.classList.toggle('on', k === id); g.setAttribute('aria-pressed', String(k === id)); });
     $$('.hp-edge, .hp-elabel', svg).forEach((g) => g.classList.toggle('out', g.dataset.from === id));
-    const outs = m.edges.filter((e) => e.from === id && e.mark !== '-');
+    const outs = m.edges.filter((e) => e.from === id && alive(e));
     fill(panelHead, h('code', null, id), st.final ? h('span', { class: 'hp-tag' }, '終了') : null, st.desc ? h('span', null, st.desc) : null,
       outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => { stop(); travel(e).then(() => stateEls[e.to].focus({ preventScroll: true })); } }, `${e.label || e.to} → ${e.to}`))) : null);
     // 画面の中身は一瞬で入れ替え、欄の高さだけを滑らかに変える。中身を透明から出すと、入れ替わる間に一瞬なにも映らずちらつく
@@ -867,6 +880,19 @@ function renderMachine(el) {
     if (first) swap(); else reflow(screenBox, swap);
   }
   setState(m.initial, true);
+  // 条件付きの遷移を、選ばれた案に合わせて出し入れする。配置は変えないので、状態と線の位置は動かない
+  let applied = false;
+  machineHooks.push(() => {
+    let changed = false;
+    L.edges.filter((e) => e.when && e.g).forEach((e) => {
+      const on = alive(e); if (e.g[0].classList.contains('off') === !on) return; changed = true;
+      if (!applied || !live()) { e.g.forEach((g) => g.classList.toggle('off', !on)); return; }
+      if (on) { e.g.forEach((g) => { g.classList.remove('off'); g.animate(FADE, { duration: 220, easing: OUT }); }); }
+      else e.g.forEach((g) => { g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: OUT }).onfinish = () => g.classList.toggle('off', !alive(e)); });
+    });
+    applied = true;
+    if (changed && cur) setState(cur, true);   // 「次:」のボタンを今ある遷移に合わせる
+  });
 }
 
 /* ── hp-mock: 実際の HTML を shadow root で描き、欄の幅に合わせて縮小する ── */
@@ -1100,6 +1126,7 @@ function sortAsks() {
 const mark = (st, label) => h('span', { class: 'hp-mark', 'data-state': st, ...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': 'true' }) });
 const tocMarks = [];
 function refresh() {
+  machineHooks.forEach((f) => f());
   asks.forEach((a) => {
     const st = a.state(); a.fs.dataset.state = st;
     a.status.textContent = HP.STATUS[st];

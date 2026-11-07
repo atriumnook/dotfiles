@@ -99,7 +99,7 @@ sending   -> sent      : 成功
 sending   -> failed    : エラー
 scheduled -> cancelled : 取り消し
 failed    -> cancelled : 取り消し
-+ failed  -> sending   : 再送
++ failed  -> sending   : 再送 [retry=3x5m]
 </script>
       <div data-state="scheduled sending sent cancelled">
         <hp-mock w="380"><template><div class="task"><span class="box"></span><span class="grow">見積書を送る</span><span class="small muted">🔔 11/5 17:00</span></div></template></hp-mock>

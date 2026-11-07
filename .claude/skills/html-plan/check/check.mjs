@@ -486,6 +486,13 @@ if (FULL) {
     await mc.locator('.hp-mc-outs button').first().focus(); await page.keyboard.press('Enter');
     if (await dotMoving()) fail('キーボードで遷移を押すと点が動く');
     await quiet(page);
+    // 判断の案に合わせて、条件付きの遷移(例の計画の「再送」)が出入りする
+    const retryOff = () => mc.evaluate((f) => f.querySelector('.hp-edge[data-from="failed"][data-to="sending"]')?.classList.contains('off'));
+    if (!(await retryOff())) fail('選ばれていない案の遷移(再送)が描かれている');
+    await page.evaluate(() => document.querySelector('input[name="retry"][value="3x5m"]').click()); await quiet(page);
+    if (await retryOff()) fail('案を選んでも、その案の遷移(再送)が出ない');
+    await page.evaluate(() => document.querySelector('input[name="retry"][value="none"]').click()); await quiet(page);
+    if (!(await retryOff())) fail('案を戻しても、遷移(再送)が消えない');
     // 主な経路の再生: 押したときだけ一度たどって止まる。再生中に押すと止まる
     const play = mc.locator('.hp-mc-play');
     if (await play.count()) {
