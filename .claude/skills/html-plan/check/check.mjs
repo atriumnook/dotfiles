@@ -440,7 +440,7 @@ if (FULL) {
   await r.ctx.close();
 }
 
-/* ── 図の動き: 状態図は実際にある遷移だけを点でたどり、画面はちらつかない。取り消しは深さの順に及ぶ。番号と注記は連動する ── */
+/* ── 図の動き: 状態図は実際にある遷移だけを点でたどり、画面はちらつかない。取り消しは子孫にも及ぶ。番号と注記は連動する ── */
 {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
   const page = await ctx.newPage(); const logs = [];
@@ -467,15 +467,13 @@ if (FULL) {
     if (await dotMoving()) fail('キーボードで遷移を押すと点が動く');
     await quiet(page);
   }
-  // 呼び出しの木: 取り消し線が引かれ、子孫は深さの順に遅れて薄くなる
+  // 呼び出しの木: 取り消し線が引かれ、子孫も遅れずに薄くなる
   const parent = await page.evaluate(() => { const rows = [...document.querySelectorAll('.hp-row')]; const i = rows.findIndex((r, k) => r.dataset.mark && r.querySelector('.hp-strike') && rows[k + 1] && +rows[k + 1].style.getPropertyValue('--d') > +r.style.getPropertyValue('--d')); if (i < 0) return -1; rows[i].dataset.checkRow = '1'; rows[i].scrollIntoView({ block: 'center' }); return i; });
   if (parent >= 0) {
     const row = page.locator('.hp-row[data-check-row]'); await row.hover(); await row.locator('.hp-strike').click();
     const st = await page.evaluate(() => ({ line: document.getAnimations().some((a) => a instanceof CSSTransition && a.effect.pseudoElement === '::after' && a.transitionProperty === 'transform'), delays: [...document.querySelectorAll('.hp-row.under-struck')].map((r) => ({ d: +r.style.getPropertyValue('--d'), ms: parseFloat(getComputedStyle(r).transitionDelay) * 1000 })).sort((a, b) => a.d - b.d) }));
     if (!st.line) fail('取り消し線が引かれる動きがない');
-    // 深い行ほど遅れる(同じ深さは同じ遅れ)。DOM の並び順ではなく深さで比べる
-    const bad = !st.delays.length || st.delays[0].ms < 50 || st.delays.some((x, i) => i && (x.d === st.delays[i - 1].d ? x.ms !== st.delays[i - 1].ms : x.ms <= st.delays[i - 1].ms));
-    if (bad) fail(`取り消しの子孫が深さの順に薄くならない(${st.delays.map((x) => `深さ${x.d}:${x.ms}ms`).join(', ')})`);
+    if (!st.delays.length || st.delays.some((x) => x.ms !== 0)) fail(`取り消しの子孫が薄くならないか、遅れて薄くなる(${st.delays.map((x) => `深さ${x.d}:${x.ms}ms`).join(', ')})`);
     await quiet(page); await row.locator('.hp-strike').click(); await quiet(page);
   }
   // mock の番号と注記: マウスを載せたときとキーボードで入ったときに連動する
