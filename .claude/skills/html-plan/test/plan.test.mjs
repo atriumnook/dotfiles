@@ -39,24 +39,6 @@ test('statusLine と nextLine: formatHead の2行目と3行目に一致する', 
   assert.equal(HP.formatHead(r, 'proceed', true), `# 回答: 計画\n${HP.nextLine('proceed')}\n${HP.statusLine(r, true)}\n`);
 });
 
-test('carriedAnswer: 質問・案・既定値・claim が同じで回答済みの判断だけを引き継ぐ', () => {
-  const print = HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['3']);
-  const last = { asked: { limit: print, tz: print }, confirmed: { limit: true }, answers: { limit: ['10'], tz: ['3'] } };
-  assert.deepEqual(HP.carriedAnswer(last, 'limit', print), ['10']);
-  assert.equal(HP.carriedAnswer(last, 'tz', print), null, '未回答');
-  assert.equal(HP.carriedAnswer(last, 'other', print), null, '前の版にない');
-  for (const changed of [HP.askPrint('上限は?', [['3', '3件'], ['10', '10件']], ['3']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件(要一覧)']], ['3']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['10']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['3'], '変わった claim')]) assert.equal(HP.carriedAnswer(last, 'limit', changed), null);
-  assert.equal(HP.carriedAnswer(null, 'limit', print), null, '前の版がない');
-  assert.equal(HP.carriedAnswer({ confirmed: { limit: true }, answers: { limit: ['3'] } }, 'limit', print), null, '指紋のない古い保存');
-});
-
-test('parseMachine: 遷移の行の末尾の [name=value] を条件として読み、印のない条件は error にする', () => {
-  const m = HP.parseMachine('state a\nstate b final\na -> b : 送る\n+ b -> a : 再送 [retry=3x5m]');
-  assert.deepEqual(m.edges.map((e) => [e.mark, e.label, e.when]), [[' ', '送る', null], ['+', '再送', { name: 'retry', value: '3x5m' }]]);
-  const bad = HP.parseMachine('state a\nstate b final\na -> b : 送る [retry=none]');
-  assert.match(bad.errors.join('\n'), /条件 \[retry=none\] を書く遷移には、\+.*か -/);
-});
-
 test('parseCalls: 2段以上深い字下げは error', () => {
   const m = HP.parseCalls('a()\n      b()');
   assert.equal(m.errors.length, 1);
@@ -301,23 +283,6 @@ test('pack: 部品カタログは error も warning もなく通る', () => {
   const r = pack(resolve(skill, 'examples/parts.html'));
   assert.equal(r.code, 0, r.out);
   assert.doesNotMatch(r.out, /⚠/, r.out);
-});
-
-test('pack: 遷移の条件が指す判断と案がなければ error にする', (t) => {
-  const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
-  const f = resolve(dir, 'plan.html');
-  writeFileSync(f, page(`<hp-claim><p>失敗した通知を再送する。</p><hp-machine><script type="text/plain">
-state a initial
-state b final
-a -> b : 送る
-+ b -> a : 再送 [retry=3x5m]
-+ a -> b : 別 [mode=fast]
-</script></hp-machine><hp-ask id="retry"><p>再送するか。</p><label><input type="radio" name="retry" value="none" checked> しない</label><label><input type="radio" name="retry" value="once"> 1回</label></hp-ask></hp-claim>`));
-  const r = pack(f);
-  assert.equal(r.code, 1);
-  assert.match(r.out, /"retry" に value "3x5m" の案がない\(none, once\)/);
-  assert.match(r.out, /条件の判断 "mode" がない/);
 });
 
 test('pack: src の行と呼び出しの前後を file から埋め込む', (t) => {

@@ -364,7 +364,6 @@ textarea.hp-out { flex: 1; min-height: 300px; padding: 12px; border: 0; border-r
 textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset: -1px; background: var(--card); }
 .hp-cmp-foot { flex: none; padding: 12px 20px 14px; border-top: 1px solid var(--line-2); }
 .hp-dlg-status { margin: 0 0 8px; color: var(--ink-2); font-size: 13px; } .hp-dlg-status:empty { margin: 0; }
-.hp-dlg-warn { margin: 0 0 8px; color: var(--accent); font-size: 13px; font-weight: 500; } .hp-dlg-warn:empty { margin: 0; }
 .hp-verdicts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .hp-verdicts .hp-btn { min-height: 44px; padding-inline: 10px; }
 .hp-cmp-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 6px; }
@@ -409,9 +408,8 @@ textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .hp-ask-foot { justify-content: flex-end; }
 
 /* ── 図の動き ── */
-/* 状態図: 遷移をたどる点と、主な経路の再生 */
+/* 状態図: 遷移をたどる点 */
 .hp-mc-dot { fill: var(--accent); pointer-events: none; }
-.hp-mc-tools { display: flex; justify-content: flex-end; padding: 0 14px 8px; }
 /* 呼び出しの木: 取り消し線は文字の高さの中心に引く(行の高さの半分は、文字の領域の中心と一致する) */
 .hp-row.struck .hp-nm { text-decoration: none; }
 .hp-row .hp-nm { position: relative; }
@@ -424,5 +422,3 @@ textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .hp-mpin.hl { transform: scale(1.18); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent); }
 @media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) { .hp-mpin { transition: transform 160ms var(--ease-out), box-shadow 160ms ease; } }
 html[data-input="keyboard"] :is(.hp-row, .hp-row .hp-nm, .hp-row .hp-nm::after, .hp-mpin) { transition: none; }
-/* 状態図: 選ばれていない案の遷移は描かない(配置は残すので、ほかの線と状態は動かない) */
-:is(.hp-edge, .hp-elabel).off { visibility: hidden; }

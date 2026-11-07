@@ -270,9 +270,9 @@ if (FULL) {
   w.logs.forEach((m) => errors.push(`リサイズ: ${m}`));
   await w.ctx.close();
 
-  // 再発行: 同じ title の前の版から、変わっていない判断の回答と補足だけを引き継ぐ。1つ目の判断の質問を変えた版と、最後の判断の claim を変えた版で確かめる
-  const v1 = readFileSync(page0, 'utf8'), v2 = v1.replace(/(<hp-ask\b[^>]*>\s*<p>)/, '$1(変更)');
-  if (v2 !== v1) {
+  // 再発行: 回答は版ごとに保存する。直した版は空の回答から始まり、前の版を開き直すとその版の回答が戻る
+  const v1 = readFileSync(page0, 'utf8'), v2 = v1.replace('</h1>', '(直した版)</h1>');
+  if (v2 !== v1 && /<hp-ask\b/.test(v1)) {
     let served = v1;
     const c = await open({ width: 1280, height: 900 });
     await c.ctx.route(url, (r) => r.fulfill({ contentType: 'text/html', body: served }));
@@ -280,36 +280,16 @@ if (FULL) {
     const swap = async (html) => { served = html; await c.page.reload(); await c.page.waitForSelector('html[data-hp-ready]'); };
     await swap(v1);
     const total = await c.page.locator('fieldset.hp-ask').count();
-    // 変えた判断と同じ claim にある判断も、引き継がない
-    const untouched = (html, lastToo) => c.page.evaluate(([src, both]) => { const asks = [...new DOMParser().parseFromString(src, 'text/html').querySelectorAll('hp-ask')]; const hit = (a) => { const t = a.closest('hp-claim'); return t ? [...t.querySelectorAll('hp-ask')] : [a]; }; const out = new Set(hit(asks[0])); if (both) hit(asks.at(-1)).forEach((a) => out.add(a)); return asks.length - out.size; }, [html, lastToo]);
-    const keep = await untouched(v1, false), keepBoth = await untouched(v1, true);
     await c.page.evaluate(() => document.querySelectorAll('.hp-confirm').forEach((b) => b.click()));
-    await c.page.fill('.hp-overall', '前の版への指摘');
-    await c.page.evaluate(() => { const n = [...document.querySelectorAll('.hp-ask-note')].at(-1); n.value = '最後の判断の補足'; n.dispatchEvent(new Event('input', { bubbles: true })); }); await settle(c.page);
-    if (!(await head()).includes(`判断 ${total}/${total} 回答済み`)) errors.push('再発行: 検査の準備で全判断を回答済みにできない');
+    await c.page.fill('.hp-overall', '前の版への指摘'); await settle(c.page);
     await swap(v2);
-    let md = await head();
-    if (!md.includes(`判断 ${keep}/${total} 回答済み`)) errors.push(`再発行: 変わっていない判断だけを引き継いでいない(${md.split('\n')[2]})`);
-    if (keep && !(await c.page.locator('.hp-dlg-warn').textContent()).includes(`判断 ${keep} 件は、前の版の回答を引き継ぎました`)) errors.push('再発行: 引き継いだことが画面に出ない');
-    if (keep === total - 1 && !md.includes('最後の判断の補足')) errors.push('再発行: 引き継いだ判断の補足が消えた');
-    if (md.includes('前の版への指摘')) errors.push('再発行: 全体への指摘を引き継いだ');
+    const md = await head();
+    if (!md.includes(`判断 0/${total} 回答済み`) || md.includes('前の版への指摘')) errors.push(`再発行: 直した版に前の版の回答が残っている(${md.split('\n')[2]})`);
     await swap(v1);
     if (!(await head()).includes('前の版への指摘')) errors.push('再発行: 前の版を開き直すと、その版の回答が消えている');
-    // 前の版をあとから変えても、引き継ぎ済みの版は変わらない
-    await c.page.evaluate(() => { const n = [...document.querySelectorAll('.hp-ask-note')].at(-1); n.value = '前の版にあとから書いた補足'; n.dispatchEvent(new Event('input', { bubbles: true })); }); await settle(c.page);
-    await swap(v2);
-    md = await head();
-    if (!md.includes(`判断 ${keep}/${total} 回答済み`) || md.includes('前の版にあとから書いた補足')) errors.push('再発行: 引き継いだ回答が保存されず、再読み込みで変わる');
-    await swap(v2.replace(/(<hp-ask\b(?![\s\S]*<hp-ask\b))/, '<p>(claim を変更)</p>$1'));
-    if (!(await head()).includes(`判断 ${keepBoth}/${total} 回答済み`)) errors.push(`再発行: claim が変わった判断を引き継いだ(${(await head()).split('\n')[2]})`);
-    await swap(v2);
-    await c.page.getByRole('button', { name: '回答を消去' }).click(); await c.page.getByRole('button', { name: 'もう一度押すと消去' }).click();
-    await c.page.waitForLoadState(); await c.page.waitForSelector('html[data-hp-ready]');
-    await swap(v1.replace(/(<hp-ask\b[^>]*>\s*<p>)/, '$1(再度変更)'));
-    if (!(await head()).includes(`判断 0/${total} 回答済み`)) errors.push('再発行: 回答を消去したのに、次の版へ引き継がれた');
     c.logs.forEach((m) => errors.push(`再発行: ${m}`));
     await c.ctx.close();
-  } else if (/<hp-ask\b/.test(v1)) warns.push('再発行: 直下に <p> のある hp-ask がなく、再発行の検査を省いた');
+  }
 
   // 狭い画面: 下のバーからシートを開く。閉じると答えた判断が畳まれる
   const n = await open({ width: 390, height: 800 });
@@ -486,24 +466,6 @@ if (FULL) {
     await mc.locator('.hp-mc-outs button').first().focus(); await page.keyboard.press('Enter');
     if (await dotMoving()) fail('キーボードで遷移を押すと点が動く');
     await quiet(page);
-    // 判断の案に合わせて、条件付きの遷移(例の計画の「再送」)が出入りする
-    const retryOff = () => mc.evaluate((f) => f.querySelector('.hp-edge[data-from="failed"][data-to="sending"]')?.classList.contains('off'));
-    if (!(await retryOff())) fail('選ばれていない案の遷移(再送)が描かれている');
-    await page.evaluate(() => document.querySelector('input[name="retry"][value="3x5m"]').click()); await quiet(page);
-    if (await retryOff()) fail('案を選んでも、その案の遷移(再送)が出ない');
-    await page.evaluate(() => document.querySelector('input[name="retry"][value="none"]').click()); await quiet(page);
-    if (!(await retryOff())) fail('案を戻しても、遷移(再送)が消えない');
-    // 主な経路の再生: 押したときだけ一度たどって止まる。再生中に押すと止まる
-    const play = mc.locator('.hp-mc-play');
-    if (await play.count()) {
-      await play.click(); let saw = false;
-      for (let i = 0; i < 40 && (await play.textContent()) !== '主な経路を再生'; i++) { if (await dotMoving()) saw = true; await page.waitForTimeout(100); }
-      if (!saw) fail('「主な経路を再生」で点が動かない');
-      if ((await play.textContent()) !== '主な経路を再生') fail('「主な経路を再生」が終わっても止まらない');
-      await play.click(); await page.waitForTimeout(150); await play.click(); await quiet(page);
-      const stopped = await now(); await page.waitForTimeout(1200);
-      if ((await now()) !== stopped || await dotMoving()) fail('再生中に押しても止まらない');
-    } else fail('上の段が遷移でつながっているのに「主な経路を再生」が出ない');
   }
   // 呼び出しの木: 取り消し線が引かれ、子孫は深さの順に遅れて薄くなる
   const parent = await page.evaluate(() => { const rows = [...document.querySelectorAll('.hp-row')]; const i = rows.findIndex((r, k) => r.dataset.mark && r.querySelector('.hp-strike') && rows[k + 1] && +rows[k + 1].style.getPropertyValue('--d') > +r.style.getPropertyValue('--d')); if (i < 0) return -1; rows[i].dataset.checkRow = '1'; rows[i].scrollIntoView({ block: 'center' }); return i; });
