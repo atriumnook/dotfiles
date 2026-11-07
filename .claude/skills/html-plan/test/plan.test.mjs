@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -34,20 +34,27 @@ test('parseCalls: mark・字下げ・場所・注記を読み、空行で入口�
 
 test('statusLine と nextLine: formatHead の2行目と3行目に一致する', () => {
   const r = { title: '計画', asks: [{ status: 'pending' }, { status: 'changed' }], edits: [], struck: [], comments: [] };
-  assert.equal(HP.statusLine(r, true), '状況: 判断 1/2 確認済み · 変更 1 · 手編集あり');
+  assert.equal(HP.statusLine(r, true), '状況: 判断 1/2 回答済み · 変更 1 · 手編集あり');
   assert.equal(HP.nextLine('proceed'), '次の動き: **実装に進める**');
   assert.equal(HP.formatHead(r, 'proceed', true), `# 回答: 計画\n${HP.nextLine('proceed')}\n${HP.statusLine(r, true)}\n`);
 });
 
-test('carriedAnswer: 質問・案・既定値・claim が同じで確認済みの判断だけを引き継ぐ', () => {
+test('carriedAnswer: 質問・案・既定値・claim が同じで回答済みの判断だけを引き継ぐ', () => {
   const print = HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['3']);
   const last = { asked: { limit: print, tz: print }, confirmed: { limit: true }, answers: { limit: ['10'], tz: ['3'] } };
   assert.deepEqual(HP.carriedAnswer(last, 'limit', print), ['10']);
-  assert.equal(HP.carriedAnswer(last, 'tz', print), null, '未確認');
+  assert.equal(HP.carriedAnswer(last, 'tz', print), null, '未回答');
   assert.equal(HP.carriedAnswer(last, 'other', print), null, '前の版にない');
   for (const changed of [HP.askPrint('上限は?', [['3', '3件'], ['10', '10件']], ['3']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件(要一覧)']], ['3']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['10']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['3'], '変わった claim')]) assert.equal(HP.carriedAnswer(last, 'limit', changed), null);
   assert.equal(HP.carriedAnswer(null, 'limit', print), null, '前の版がない');
   assert.equal(HP.carriedAnswer({ confirmed: { limit: true }, answers: { limit: ['3'] } }, 'limit', print), null, '指紋のない古い保存');
+});
+
+test('parseMachine: 遷移の行の末尾の [name=value] を条件として読み、印のない条件は error にする', () => {
+  const m = HP.parseMachine('state a\nstate b final\na -> b : 送る\n+ b -> a : 再送 [retry=3x5m]');
+  assert.deepEqual(m.edges.map((e) => [e.mark, e.label, e.when]), [[' ', '送る', null], ['+', '再送', { name: 'retry', value: '3x5m' }]]);
+  const bad = HP.parseMachine('state a\nstate b final\na -> b : 送る [retry=none]');
+  assert.match(bad.errors.join('\n'), /条件 \[retry=none\] を書く遷移には、\+.*か -/);
 });
 
 test('parseCalls: 2段以上深い字下げは error', () => {
@@ -141,10 +148,10 @@ const answer = {
 
 test('formatResponse: 次の動きと状況を先頭に置き、本文は全体→判断→編集→取り消し→コメントの順にする', () => {
   const md = HP.formatResponse(answer, { verdict: 'revise' });
-  assert.ok(md.startsWith('# 回答: 計画\n次の動き: **計画を直して再提示する**\n状況: 判断 2/3 確認済み · 変更 1 · 編集 1 · 取り消し 1 · コメント 1\n\n## 全体\n> 期限の扱いを先に決めたい\n'));
+  assert.ok(md.startsWith('# 回答: 計画\n次の動き: **計画を直して再提示する**\n状況: 判断 2/3 回答済み · 変更 1 · 編集 1 · 取り消し 1 · コメント 1\n\n## 全体\n> 期限の扱いを先に決めたい\n'));
   assert.match(md, /- \*\*変更\*\* \[1\.2\] 上限は\? → \*\*10件\*\* `limit=10`\(提案は 3件\)\n {2}> 一覧も欲しい\n {2}> 2行目/);
   assert.match(md, /- 提案どおり \[2\] 再送は\? → \*\*しない\*\* `retry=none`\n/);
-  assert.match(md, /- \*\*未確認\*\* \[3\] 経路は\? → \*\*push\*\* `channel=push`\(提案の案\)/);
+  assert.match(md, /- \*\*未回答\*\* \[3\] 経路は\? → \*\*push\*\* `channel=push`\(提案の案\)/);
   assert.match(md, /````diff\n[\s\S]*-```\n[\s\S]*````/, 'diff に ``` があれば fence を長くする');
   assert.match(md, /## 取り消し\n- \[1\.1 · api\/metrics\.ts:40\] `track\(\)`/);
   assert.match(md, /## コメント\n- \[1\] 主張\n {2}> なぜ\?/);
@@ -207,36 +214,6 @@ test('merge3: 片方だけの変更はそのまま採る', () => {
   assert.equal(HP.merge3('a', 'b', 'a').text, 'b');
 });
 
-/* ── spring ── */
-// 運動方程式 m x'' = -k (x - 1) - c x' を RK4 で積分した値を、解析解と比べる
-const integrate = ({ stiffness: k, damping: c, mass: m }, until, dt = 1 / 4000) => {
-  let x = 0, v = 0; const out = [];
-  const a = (x0, v0) => (-k * (x0 - 1) - c * v0) / m;
-  for (let i = 0, n = Math.round(until / dt); i <= n; i++) {
-    out.push(x);
-    const k1x = v, k1v = a(x, v), k2x = v + dt / 2 * k1v, k2v = a(x + dt / 2 * k1x, v + dt / 2 * k1v);
-    const k3x = v + dt / 2 * k2v, k3v = a(x + dt / 2 * k2x, v + dt / 2 * k2v), k4x = v + dt * k3v, k4v = a(x + dt * k3x, v + dt * k3v);
-    x += dt / 6 * (k1x + 2 * k2x + 2 * k3x + k4x); v += dt / 6 * (k1v + 2 * k2v + 2 * k3v + k4v);
-  }
-  return out;
-};
-for (const [name, cfg] of Object.entries(HP.SPRINGS)) {
-  test(`spring ${name}: 解析解が数値積分と一致し、linear() が 0 で始まり 1 で終わる`, () => {
-    const s = HP.spring(cfg), xs = integrate(cfg, 1), dt = 1 / 4000;
-    xs.forEach((x, i) => { if (i % 40 === 0) assert.ok(Math.abs(s.at(i * dt) - x) < 1e-4, `t=${i * dt}`); });
-    const pts = s.easing.slice(7, -1).split(',').map(Number);
-    assert.equal(pts[0], 0); assert.equal(pts.at(-1), 1); assert.equal(pts.length, 41);
-    assert.ok(s.duration > 100 && s.duration < 900, `${s.duration}ms`);
-  });
-}
-test('spring: 減衰比どおりに、press と pop は行き過ぎ、panel と layout は行き過ぎない', () => {
-  const peak = (c) => { const s = HP.spring(c); let p = 0; for (let t = 0; t < 2; t += 0.001) p = Math.max(p, s.at(t)); return p; };
-  assert.ok(peak(HP.SPRINGS.pop) > 1.02, 'pop は少し行き過ぎる');
-  assert.ok(peak(HP.SPRINGS.press) > 1.001);
-  assert.ok(peak(HP.SPRINGS.panel) <= 1.0000001);
-  assert.ok(peak(HP.SPRINGS.layout) <= 1.0000001);
-});
-
 /* ── pack.mjs の lint ── */
 const pack = (file, ...args) => {
   try { return { code: 0, out: execFileSync(process.execPath, [resolve(skill, 'runtime/pack.mjs'), file, '--lint-only', ...args], { encoding: 'utf8' }) }; }
@@ -294,6 +271,53 @@ a -> c
     /敬体/,
   ];
   expected.forEach((re) => assert.match(r.out, re));
+});
+
+test('pack: 長さは半角を 0.5 字で数え、超えても縮めさせない', (t) => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const lint = (claim, small) => {
+    const f = resolve(dir, 'plan.html');
+    writeFileSync(f, page(`<hp-claim><p>${claim}</p><hp-ask id="q"><p>どちらか。</p><label><input type="radio" name="q" value="a" checked> A <small>${small}</small></label><label><input type="radio" name="q" value="b"> B</label></hp-ask></hp-claim>`));
+    return pack(f).out;
+  };
+  const narrow = lint(`${'a'.repeat(70)} を更新する。`, 'b'.repeat(50));
+  assert.doesNotMatch(narrow, /claim が|<small> が/, '半角 70 字 + 全角 6 字は 41.5 字、半角 50 字は 25 字');
+  const wide = lint(`${'あ'.repeat(45)}。`, 'あ'.repeat(31));
+  assert.match(wide, /claim が 46 字ある\(目安は 45 字\)。話が2つなら分ける。1つの内容なら、造語や略語で縮めず、そのままでよい/);
+  assert.match(wide, /<small> が 31 字ある\(目安は 30 字\)/);
+});
+
+test('pack: check/ と node_modules がなくても計画を pack できる', (t) => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const d of ['runtime', 'examples']) cpSync(resolve(skill, d), resolve(dir, d), { recursive: true });
+  const out = resolve(dir, 'plan.packed.html');
+  execFileSync(process.execPath, [resolve(dir, 'runtime/pack.mjs'), resolve(dir, 'examples/reminders.html'), '-o', out], { encoding: 'utf8' });
+  assert.match(readFileSync(out, 'utf8'), /<script data-html-plan>/);
+});
+
+test('pack: 部品カタログは error も warning もなく通る', () => {
+  const r = pack(resolve(skill, 'examples/parts.html'));
+  assert.equal(r.code, 0, r.out);
+  assert.doesNotMatch(r.out, /⚠/, r.out);
+});
+
+test('pack: 遷移の条件が指す判断と案がなければ error にする', (t) => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const f = resolve(dir, 'plan.html');
+  writeFileSync(f, page(`<hp-claim><p>失敗した通知を再送する。</p><hp-machine><script type="text/plain">
+state a initial
+state b final
+a -> b : 送る
++ b -> a : 再送 [retry=3x5m]
++ a -> b : 別 [mode=fast]
+</script></hp-machine><hp-ask id="retry"><p>再送するか。</p><label><input type="radio" name="retry" value="none" checked> しない</label><label><input type="radio" name="retry" value="once"> 1回</label></hp-ask></hp-claim>`));
+  const r = pack(f);
+  assert.equal(r.code, 1);
+  assert.match(r.out, /"retry" に value "3x5m" の案がない\(none, once\)/);
+  assert.match(r.out, /条件の判断 "mode" がない/);
 });
 
 test('pack: src の行と呼び出しの前後を file から埋め込む', (t) => {

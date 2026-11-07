@@ -74,7 +74,12 @@ HP.parseMachine = function parseMachine(text) {
       m.states[s[1]] = { id: s[1], desc: (s[3] || '').trim(), initial: /initial/.test(s[2]), final: /final/.test(s[2]) }; m.order.push(s[1]); return;
     }
     if (line.startsWith('|')) { m.grid.push(line.replace(/^\||\|$/g, '').split('|').map((c) => c.trim()).map((c) => (c === '.' || !c ? null : c))); return; }
-    if ((s = line.match(/^([+-])?\s*([\w-]+)\s*->\s*([\w-]+)\s*(?::\s*(.*))?$/))) { m.edges.push({ mark: s[1] || ' ', from: s[2], to: s[3], label: (s[4] || '').trim(), ln }); return; }
+    // 行の末尾の [name=value] は条件。+ はその案のときだけある遷移、- はその案でなくなる遷移
+    if ((s = line.match(/^([+-])?\s*([\w-]+)\s*->\s*([\w-]+)\s*(?::\s*(.*?))?\s*(?:\[\s*([\w-]+)\s*=\s*([^\]\s]+)\s*\])?$/))) {
+      const when = s[5] ? { name: s[5], value: s[6] } : null;
+      if (when && !s[1]) m.errors.push(`${ln} 行: 条件 [${when.name}=${when.value}] を書く遷移には、+(その案で増える)か -(その案でなくなる)を付ける`);
+      m.edges.push({ mark: s[1] || ' ', from: s[2], to: s[3], label: (s[4] || '').trim(), when, ln }); return;
+    }
     m.errors.push(`${ln} 行: 解釈できない — "${line}"`);
   });
   m.edges.forEach((e) => {
@@ -181,28 +186,6 @@ HP.layoutMachine = function layoutMachine(m, measure) {
   return { boxes, edges, minX: f(minX), minY: f(minY), W: Math.ceil(Math.max(...xs) + PAD - minX), H: Math.ceil(Math.max(...ys) + PAD - minY) };
 };
 
-/* ── spring: 物理を解いて CSS の linear() にする。依存なしで spring の曲線を使う ── */
-HP.spring = function spring({ stiffness: k, damping: c, mass: m = 1 }) {
-  const w0 = Math.sqrt(k / m), z = c / (2 * Math.sqrt(k * m));
-  const at = (t) => {
-    if (z < 1) { const wd = w0 * Math.sqrt(1 - z * z); return 1 - Math.exp(-z * w0 * t) * (Math.cos(wd * t) + (z * w0 / wd) * Math.sin(wd * t)); }
-    if (z === 1) return 1 - Math.exp(-w0 * t) * (1 + w0 * t);
-    const s = w0 * Math.sqrt(z * z - 1), a = -z * w0 + s, b = -z * w0 - s;
-    return 1 - (b * Math.exp(a * t) - a * Math.exp(b * t)) / (b - a);
-  };
-  let end = 0;
-  for (let t = 0; t < 3; t += 1 / 240) if (Math.abs(1 - at(t)) > 0.002) end = t;   // 最後に ±0.2% の外にいた時刻
-  const n = 40, pts = Array.from({ length: n + 1 }, (_, i) => (i === n ? 1 : +at(end * i / n).toFixed(4)));
-  return { at, duration: Math.round(end * 1000), easing: `linear(${pts.join(',')})` };
-};
-// BeUI の lib/ease.ts の値(MIT)。press はボタンの押下、swap は文字の入れ替え、panel は drawer、layout は高さと位置の変化
-HP.SPRINGS = {
-  press: { stiffness: 500, damping: 30, mass: 0.6 },
-  swap: { stiffness: 460, damping: 30, mass: 0.55 },
-  panel: { stiffness: 420, damping: 40, mass: 0.5 },
-  layout: { stiffness: 360, damping: 32, mass: 0.6 },
-  pop: { stiffness: 224, damping: 21.5, mass: 1 },   // { visualDuration: 0.42, bounce: 0.28 } 相当。chevron と点
-};
 
 /* ── 行単位の差分(LCS)。編集された schema / code を unified diff で返す ── */
 HP.diffOps = function diffOps(a, b) {
@@ -236,7 +219,7 @@ HP.lineDiff = function lineDiff(a, b, name = 'text', ctx = 3) {
 const fence = (s) => '`'.repeat(Math.max(3, ...(String(s).match(/`+/g) || []).map((x) => x.length + 1)));
 const quoted = (t, ind) => String(t).trim().split('\n').map((l) => `${ind}> ${l}`);
 const tick = (v) => '`' + String(v).replace(/`/g, 'ˋ') + '`';
-HP.STATUS = { pending: '未確認', confirmed: '提案どおり', changed: '変更' };
+HP.STATUS = { pending: '未回答', confirmed: '提案どおり', changed: '変更' };
 HP.VERDICT = { proceed: '実装に進める', revise: '計画を直して再提示する' };
 // 本文。読み手が編集する部分。判断は1件1行で順序を固定する(状態が変わっても行の位置が動かず、3-way merge が効く)
 HP.formatBody = function formatBody(r) {
@@ -247,7 +230,7 @@ HP.formatBody = function formatBody(r) {
     r.asks.forEach((a) => {
       const pick = a.picked.length ? a.picked.map((p) => `**${p}**`).join('、') : '(選択なし)';
       const val = a.values.length ? ' ' + tick(`${a.id}=${a.values.join(',')}`) : '';
-      const head = a.status === 'changed' ? '**変更**' : a.status === 'pending' ? '**未確認**' : '提案どおり';
+      const head = a.status === 'changed' ? '**変更**' : a.status === 'pending' ? '**未回答**' : '提案どおり';
       const tail = a.status === 'changed' ? `(提案は ${a.proposed.join('、') || 'なし'})` : a.status === 'pending' ? '(提案の案)' : '';
       out.push(`- ${head} [${a.no}] ${a.q} → ${pick}${val}${tail}`);
       if (a.note) out.push(...quoted(a.note, '  '));
@@ -270,7 +253,7 @@ HP.formatBody = function formatBody(r) {
 // 先頭の2行と末尾の注記はページが付ける。読み手の編集の外にあるので、手編集されてもページの記録として読める
 HP.statusLine = function statusLine(r, edited) {
   const pend = r.asks.filter((a) => a.status === 'pending').length, chg = r.asks.filter((a) => a.status === 'changed').length;
-  const st = [r.asks.length ? `判断 ${r.asks.length - pend}/${r.asks.length} 確認済み` : '判断なし'];
+  const st = [r.asks.length ? `判断 ${r.asks.length - pend}/${r.asks.length} 回答済み` : '判断なし'];
   [['変更', chg], ['編集', r.edits.length], ['取り消し', r.struck.length], ['コメント', r.comments.length]].forEach(([k, n]) => { if (n) st.push(`${k} ${n}`); });
   if (edited) st.push('手編集あり');
   return `状況: ${st.join(' · ')}`;
@@ -372,13 +355,27 @@ const ICON = {
 const icon = (n) => h('span', { class: 'hp-i', 'aria-hidden': 'true', html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[n]}</svg>` });
 /* ── motion ──
    頻度で決める: キーボードの操作は動かさない。reduced motion では動きを止め、色と透明度だけ残す。
-   入るときは spring + blur + 移動、出るときは 140〜180ms で短く。高さと位置は瞬間移動させない。 */
-const SP = {}; Object.entries(HP.SPRINGS).forEach(([k, v]) => { const s = HP.spring(v); SP[k] = { duration: s.duration, easing: s.easing }; });
-const OUT = 'cubic-bezier(.23, 1, .32, 1)';
+   指で引く操作がないので spring は使わない。出入りと開閉は ease-out、画面の上での移動は ease-in-out にする。
+   UI の動きは 300ms 未満にし、閉じる・出る動きは開く・入る動きより短くする。高さと位置は瞬間移動させない。 */
+// 高さは drawer の曲線にする。ease-out は動き出しが速く、高い中身では最初の1フレームで全高の3割以上動いて跳んで見える
+const OUT = 'cubic-bezier(.23, 1, .32, 1)', IN_OUT = 'cubic-bezier(.77, 0, .175, 1)', DRAWER = 'cubic-bezier(.32, .72, 0, 1)';
+const SP = {
+  press: { duration: 160, easing: OUT },    // ボタンの押下
+  pop: { duration: 160, easing: OUT },      // chevron の回転と状態の印
+  swap: { duration: 200, easing: OUT },     // 中身の入れ替え
+  layout: { duration: 250, easing: DRAWER },   // 開くときの高さ
+  close: { duration: 220, easing: DRAWER },    // 閉じるときの高さと透明。開くより短く、1フレームで全高の3割を超えて動かない長さ
+  panel: { duration: 250, easing: OUT },    // 回答のシート
+  move: { duration: 200, easing: IN_OUT },  // 選択の枠と tab の下線の移動
+  trip: { duration: 320, easing: IN_OUT },  // 状態図の遷移をたどる点。説明のための動きなので UI より少し長い
+};
 const EXIT = { duration: 160, easing: OUT };
 let modality = 'pointer';
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const live = () => modality === 'pointer' && !calm();
+// reduced motion でも、マウスの操作には透明度の変化だけを返す。何も変わらないと、操作が届いたかが分からない
+const softly = () => modality === 'pointer' && calm();
+const FADE = [{ opacity: 0 }, { opacity: 1 }], SOFT = { duration: 150, easing: OUT };
 const markInput = (m) => { modality = m; document.documentElement.dataset.input = m; };
 addEventListener('pointerdown', () => markInput('pointer'), true);
 addEventListener('keydown', () => markInput('keyboard'), true);
@@ -409,7 +406,7 @@ const BOX = ['height', 'marginTop', 'marginBottom', 'paddingTop', 'paddingBottom
 const boxOf = (el) => { const cs = getComputedStyle(el); return Object.fromEntries(BOX.map((p) => [p, cs[p]])); };
 const zeroBox = Object.fromEntries(BOX.map((p) => [p, '0px']));
 function enter(el) {
-  if (!live()) return;
+  if (!live()) { if (softly()) el.animate(FADE, SOFT); return; }
   const box = boxOf(el);
   el.style.overflow = 'clip';
   el.animate([zeroBox, box], SP.layout).onfinish = () => { el.style.overflow = ''; };
@@ -422,12 +419,12 @@ function collapse(el, done) {
   const box = boxOf(el);
   el.style.overflow = 'clip'; el.style.pointerEvents = 'none';
   const fade = el.animate(blurOut(), { ...EXIT, fill: 'forwards' });
-  el.animate([box, zeroBox], { ...SP.layout, fill: 'forwards' }).onfinish = (e) => { done(); e.target.cancel(); fade.cancel(); el.style.overflow = ''; el.style.pointerEvents = ''; el._leaving = false; };
+  el.animate([box, zeroBox], { ...SP.close, fill: 'forwards' }).onfinish = (e) => { done(); e.target.cancel(); fade.cancel(); el.style.overflow = ''; el.style.pointerEvents = ''; el._leaving = false; };
 }
 const leave = (el) => collapse(el, () => el.remove());
 function roll(el, text, dir = 1) {
   const old = el._v; if (old === String(text)) return; el._v = String(text);
-  if (!live() || old == null) { el.textContent = text; return; }
+  if (!live() || old == null) { el.textContent = text; if (old != null && softly()) el.animate(FADE, SOFT); return; }
   const inn = h('span', null, String(text)), out = h('span', { 'aria-hidden': 'true' }, old);
   el.replaceChildren(inn, out);
   inn.animate([{ opacity: 0, translate: `0 ${90 * dir}%`, filter: 'blur(3px)' }, { opacity: 1, translate: '0 0', filter: 'blur(0)' }], SP.swap);
@@ -461,7 +458,7 @@ function foldAsk(a, compact) {
     if (folding) { const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = ''; if (live()) tweenHeight(fs, from, rectH(fs)); }
     return;
   }
-  if (!live()) { tweens.get(fs)?.cancel(); fs.style.overflow = ''; fs.toggleAttribute('data-compact', compact); return; }
+  if (!live()) { tweens.get(fs)?.cancel(); fs.style.overflow = ''; fs.toggleAttribute('data-compact', compact); if (compact) sortAsks(); else if (softly()) [...fs.children].forEach((k) => { if (k !== a.sumBtn) k.animate(FADE, SOFT); }); return; }
   const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = '';
   fs.toggleAttribute('data-compact', compact); const to = rectH(fs);
   const kids = [...fs.children].filter((k) => k !== a.sumBtn);
@@ -473,11 +470,12 @@ function foldAsk(a, compact) {
       fs._foldT = null;
       fs.toggleAttribute('data-compact', true);
       kids.forEach((k) => k.getAnimations().forEach((x) => x.cancel()));
+      sortAsks();
       a.sumBtn.animate(blurIn(6), SP.swap);
     }, 110);
   } else {
     tweenHeight(fs, from, to);
-    kids.forEach((k, i) => k.animate(blurIn(6), { ...SP.swap, delay: i * 30, fill: 'backwards' }));
+    kids.forEach((k) => k.animate(FADE, { ...SP.swap, fill: 'backwards' }));
   }
 }
 
@@ -572,25 +570,30 @@ function renderClaim(c, idx) {
   [...c.childNodes].forEach((n) => { if (n !== p) body.append(n); });
   c.replaceChildren(head, body);
   c.dataset.level = c._level; if (c.getAttribute('kind')) c.dataset.kind = c.getAttribute('kind');
-  toggle.addEventListener('click', (e) => setOpen(c, toggle.getAttribute('aria-expanded') !== 'true', live() && e.detail > 0));
+  toggle.addEventListener('click', (e) => setOpen(c, toggle.getAttribute('aria-expanded') !== 'true', e.detail > 0 && (live() || (softly() && 'fade'))));
   c._toggle = toggle; c._body = body; c._head = head;
   registerTarget(key, { where: c._no, quote: text.textContent.trim(), anchor: toggle, place: (card) => head.after(card) });
 }
+// 閉じるときの透明は、高さが縮みきって hidden にするまで保つ。保たないと、縮む途中で中身が見え直してちらつく
+const fades = new WeakMap();
 function setOpen(c, open, animated = false) {
   if (!c._body) return;
   const b = c._body;
   c._toggle.setAttribute('aria-expanded', String(open)); c.classList.toggle('open', open);
-  if (!animated) { tweens.get(b)?.cancel(); b.style.overflow = ''; b.hidden = !open; return; }
-  const closed = b.hidden, from = closed ? 0 : rectH(b);
-  tweens.get(b)?.cancel(); b.style.overflow = ''; b.hidden = false;
+  if (!animated || animated === 'fade') { tweens.get(b)?.cancel(); fades.get(b)?.cancel(); b.style.overflow = ''; b.hidden = !open; if (animated && open) b.animate(FADE, SOFT); return; }
+  const closed = b.hidden, from = closed ? 0 : rectH(b), op = closed ? '0' : getComputedStyle(b).opacity;
+  // 動いている途中で逆向きにしたときは ease-in-out で静止から動かす。ease-out だと最速で逆へ動き出して跳ぶ
+  const turn = tweens.has(b) ? { easing: IN_OUT } : {};
+  tweens.get(b)?.cancel(); fades.get(b)?.cancel(); b.style.overflow = ''; b.hidden = false;
   if (open) {
     $$('hp-mock', b).forEach((m) => m._fit?.());   // mock の高さは ResizeObserver で後から決まる。測る前に確定させる
-    tweenHeight(b, from, rectH(b));
-    b.animate([{ opacity: closed ? 0 : getComputedStyle(b).opacity }, { opacity: 1 }], { duration: 180, easing: OUT });
-    if (closed) [...b.children].slice(0, 5).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }], { duration: 260, easing: OUT, delay: i * 35, fill: 'backwards' }));
+    tweenHeight(b, from, rectH(b), { ...SP.layout, ...turn });
+    b.animate([{ opacity: op }, { opacity: 1 }], SP.layout);
+    // 子は 30ms ずつずらし、全体を 300ms 未満に収める
+    if (closed) [...b.children].slice(0, 4).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }], { ...SP.layout, delay: i * 30, fill: 'backwards' }));
   } else {
-    b.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: OUT });
-    tweenHeight(b, from, 0, SP.layout, () => { b.hidden = true; });
+    fades.set(b, b.animate([{ opacity: op }, { opacity: 0 }], { ...SP.close, fill: 'forwards' }));
+    tweenHeight(b, from, 0, { ...SP.close, ...turn }, () => { b.hidden = true; fades.get(b)?.cancel(); });
   }
 }
 function reveal(el) { for (let c = claimOf(el); c; c = claimOf(c.parentElement)) setOpen(c, true); }
@@ -767,6 +770,8 @@ function paintStrikes() {
     [...list.querySelectorAll('.hp-row')].forEach((row) => {
       const d = +row.style.getPropertyValue('--d');
       if (cut >= 0 && d <= cut) cut = -1;
+      // 取り消しが下へ及ぶ様子を、深さの順に 30ms ずつずらして見せる(全体で 300ms 未満)
+      row.style.transitionDelay = cut >= 0 && live() ? `${Math.min(120, 60 + (d - cut - 1) * 30)}ms` : '';
       row.classList.toggle('under-struck', cut >= 0);
       if (cut < 0 && row.classList.contains('struck')) cut = d;
     });
@@ -774,6 +779,12 @@ function paintStrikes() {
 }
 
 /* ── hp-machine ── */
+// 判断が変わるたびに、条件付きの遷移を出し入れする(refresh から呼ぶ)
+const machineHooks = [];
+// 判断 name で選ばれている value
+const chosen = (name) => asks.find((a) => a.inputs.some((i) => i.name === name))?.values() || [];
+// 遷移が今あるか。条件がなければ「-」以外はある。条件があれば、選ばれた案に合わせる
+const alive = (e) => (e.when ? (chosen(e.when.name).includes(e.when.value) ? e.mark === '+' : e.mark === '-') : e.mark !== '-');
 let measureCtx = null;
 function measure(s, px) {
   measureCtx = measureCtx || document.createElement('canvas').getContext('2d');
@@ -792,12 +803,12 @@ function renderMachine(el) {
   L.edges.forEach((e) => {
     const g = svgEl('g', { class: 'hp-edge', 'data-from': e.from, 'data-to': e.to, 'data-mark': e.mark });
     g.append(svgEl('path', { d: e.d }), svgEl('polygon', { points: e.head.map((p) => p.join(',')).join(' ') }));
-    gEdges.append(g);
+    gEdges.append(g); e.g = [g];
     if (e.lbox) {
       const lg = svgEl('g', { class: 'hp-elabel', 'data-from': e.from, 'data-to': e.to, 'data-mark': e.mark });
       lg.append(svgEl('rect', { x: e.lbox.x, y: e.lbox.y, width: e.lbox.w, height: e.lbox.h, rx: 5 }));
       const t = svgEl('text', { x: e.lbox.x + e.lbox.w / 2, y: e.lbox.y + e.lbox.h / 2 + 4, 'text-anchor': 'middle' }); t.textContent = e.label; lg.append(t);
-      gLabels.append(lg);
+      gLabels.append(lg); e.g.push(lg);
     }
   });
   const stateEls = {};
@@ -808,33 +819,80 @@ function renderMachine(el) {
     g.append(svgEl('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 10 }));
     if (st.final) g.append(svgEl('rect', { class: 'inner', x: b.x + 3, y: b.y + 3, width: b.w - 6, height: b.h - 6, rx: 7 }));
     const t = svgEl('text', { x: b.x + b.w / 2, y: b.y + b.h / 2 + 4.5, 'text-anchor': 'middle' }); t.textContent = b.id; g.append(t);
-    g.addEventListener('click', () => setState(b.id));
+    g.addEventListener('click', () => pick(b.id));
     g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setState(b.id); } });
     gStates.append(g); stateEls[b.id] = g;
   });
-  svg.append(gEdges, gStates, gLabels);
+  const dot = svgEl('circle', { class: 'hp-mc-dot', r: 4.5, cx: -99, cy: -99, 'aria-hidden': 'true' });
+  svg.append(gEdges, gStates, gLabels, dot);
   const scroller = h('div', { class: 'hp-mc-scroll' }, svg);
   const screens = $$(':scope > [data-state]', el);
   const panelHead = h('div', { class: 'hp-mc-now' }); const screenBox = h('div', { class: 'hp-mc-screen' });
   screens.forEach((s) => screenBox.append(s));
   const panel = h('div', { class: 'hp-mc-panel', 'aria-live': 'polite' }, panelHead, screenBox);
-  fig.append(scroller, panel);
+  // 上の段の状態が遷移でつながっていれば、押したときだけ一度たどる。自動では動かさない(読む邪魔になり、見ている状態が勝手に変わる)
+  const top = (m.grid[0] || []).filter((id) => id && id !== '.' && m.states[id]);
+  const routeOf = (ok) => top.slice(1).map((id, i) => m.edges.find((e) => e.from === top[i] && e.to === id && ok(e)));
+  const route = routeOf((e) => e.mark !== '-' || e.when);
+  let run = 0;
+  const play = top.length > 1 && route.every(Boolean) ? h('button', { type: 'button', class: 'hp-btn small hp-mc-play' }, '主な経路を再生') : null;
+  function stop() { run++; if (play) { delete play.dataset.on; play.textContent = '主な経路を再生'; } }
+  if (play) play.onclick = async () => {
+    if (play.dataset.on) { stop(); trip?.finish(); return; }
+    const me = ++run; play.dataset.on = '1'; play.textContent = '止める'; trip?.finish(); setState(top[0]);
+    for (const e of routeOf(alive)) { if (!e) break; await new Promise((r) => setTimeout(r, 400)); if (run !== me) return; await travel(e); if (run !== me) return; }
+    stop();
+  };
+  fig.append(scroller, ...(play ? [h('div', { class: 'hp-mc-tools' }, play)] : []), panel);
+  // 実際にある遷移をたどったときだけ、点を線の上で進める。ない遷移を見せない。曲線は ease-in-out の値をそのまま使う
+  let cur = null, trip = null;
+  function travel(e) {
+    trip?.finish();
+    return new Promise((done) => {
+      const p = svg.querySelector(`.hp-edge[data-from="${CSS.escape(e.from)}"][data-to="${CSS.escape(e.to)}"] path`);
+      if (!live() || !p) { setState(e.to); done(); return; }
+      const len = p.getTotalLength(), clock = dot.animate([{ opacity: 1 }, { opacity: 1 }], SP.trip); let raf = 0;
+      const end = () => { cancelAnimationFrame(raf); clock.cancel(); dot.setAttribute('cx', -99); dot.setAttribute('cy', -99); trip = null; setState(e.to); done(); };
+      trip = { finish: end };
+      stateEls[cur]?.classList.remove('on');
+      const f = () => { const k = clock.effect.getComputedTiming().progress ?? 1; const q = p.getPointAtLength(len * k); dot.setAttribute('cx', q.x); dot.setAttribute('cy', q.y); raf = requestAnimationFrame(f); };
+      f(); clock.onfinish = end;
+    });
+  }
+  // 状態を押したとき: 今の状態からの直接の遷移が1本だけならたどる。それ以外は線をたどらずに切り替える
+  function pick(id) { stop(); trip?.finish(); if (id === cur) return; const es = m.edges.filter((e) => e.from === cur && e.to === id && alive(e)); if (es.length === 1) travel(es[0]); else setState(id); }
   const legend = [];
   if (m.edges.some((e) => e.mark === '+')) legend.push(h('span', { class: 'hp-leg add' }, '破線(緑)は提案で増える遷移'));
   if (m.edges.some((e) => e.mark === '-')) legend.push(h('span', { class: 'hp-leg del' }, '破線(赤)はなくなる遷移'));
+  if (m.edges.some((e) => e.when)) legend.push(h('span', { class: 'hp-leg' }, '判断の案に合わせて出入りする遷移がある'));
   const cap = el.getAttribute('caption');
   if (cap || legend.length) fig.append(h('div', { class: 'hp-caption' }, cap || '', ...legend));
   el.replaceChildren(fig);
-  function setState(id) {
-    if (!m.states[id]) return; const st = m.states[id];
+  function setState(id, first = false) {
+    if (!m.states[id]) return; const st = m.states[id]; cur = id;
     Object.entries(stateEls).forEach(([k, g]) => { g.classList.toggle('on', k === id); g.setAttribute('aria-pressed', String(k === id)); });
     $$('.hp-edge, .hp-elabel', svg).forEach((g) => g.classList.toggle('out', g.dataset.from === id));
-    const outs = m.edges.filter((e) => e.from === id && e.mark !== '-');
+    const outs = m.edges.filter((e) => e.from === id && alive(e));
     fill(panelHead, h('code', null, id), st.final ? h('span', { class: 'hp-tag' }, '終了') : null, st.desc ? h('span', null, st.desc) : null,
-      outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => { setState(e.to); stateEls[e.to].focus(); } }, `${e.label || e.to} → ${e.to}`))) : null);
-    screens.forEach((s) => { const show = s.dataset.state.split(/[\s,]+/).includes(id), was = !s.hidden; s.hidden = !show; if (show && !was && live()) s.animate(blurIn(6), SP.swap); });
+      outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => { stop(); travel(e).then(() => stateEls[e.to].focus({ preventScroll: true })); } }, `${e.label || e.to} → ${e.to}`))) : null);
+    // 画面の中身は一瞬で入れ替え、欄の高さだけを滑らかに変える。中身を透明から出すと、入れ替わる間に一瞬なにも映らずちらつく
+    const swap = () => screens.forEach((s) => { s.hidden = !s.dataset.state.split(/[\s,]+/).includes(id); });
+    if (first) swap(); else reflow(screenBox, swap);
   }
-  setState(m.initial);
+  setState(m.initial, true);
+  // 条件付きの遷移を、選ばれた案に合わせて出し入れする。配置は変えないので、状態と線の位置は動かない
+  let applied = false;
+  machineHooks.push(() => {
+    let changed = false;
+    L.edges.filter((e) => e.when && e.g).forEach((e) => {
+      const on = alive(e); if (e.g[0].classList.contains('off') === !on) return; changed = true;
+      if (!applied || !live()) { e.g.forEach((g) => g.classList.toggle('off', !on)); return; }
+      if (on) { e.g.forEach((g) => { g.classList.remove('off'); g.animate(FADE, { duration: 220, easing: OUT }); }); }
+      else e.g.forEach((g) => { g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: OUT }).onfinish = () => g.classList.toggle('off', !alive(e)); });
+    });
+    applied = true;
+    if (changed && cur) setState(cur, true);   // 「次:」のボタンを今ある遷移に合わせる
+  });
 }
 
 /* ── hp-mock: 実際の HTML を shadow root で描き、欄の幅に合わせて縮小する ── */
@@ -846,6 +904,13 @@ const MOCK_CSS = `:host{all:initial;display:block}*{box-sizing:border-box}
 .input{border:1px solid #d6d3cb;border-radius:8px;padding:6px 10px;background:#fff}.menu{border:1px solid #e6e3dc;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;background:#fff}
 .menu>*{padding:6px 10px;border-radius:6px}.menu .on{background:#f1eee7}.badge{display:inline-block;padding:1px 8px;border-radius:999px;background:#f1eee7;font-size:12px}
 hr{border:0;border-top:1px solid #ece9e2;margin:10px 0}
+.list-row{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid #ece9e2}.list-row:last-child{border-bottom:0}
+.status{flex:none;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1.5px #6b6962}.status.done{background:#1d1d1b;box-shadow:none}
+.tabs{display:flex;gap:16px;border-bottom:1px solid #e6e3dc}.tabs>*{padding:6px 0;color:#6b6962}.tabs>.on{color:#1d1d1b;font-weight:600;box-shadow:inset 0 -2px #1d1d1b}
+.toggle{display:inline-flex;align-items:center;gap:8px}.toggle input{appearance:none;position:relative;width:30px;height:18px;margin:0;border-radius:99px;background:#d6d3cb}.toggle input::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff}.toggle input:checked{background:#1d1d1b}.toggle input:checked::after{left:14px}
+.toast{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:#1d1d1b;color:#fff;font-size:13px}
+.table{width:100%;border-collapse:collapse;font-size:13px}.table th,.table td{padding:6px 8px;border-bottom:1px solid #ece9e2;text-align:left}.table th{color:#6b6962;font-weight:500}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 12px;color:#6b6962;text-align:center;font-size:13px}
 .term{background:#18181b;color:#e9e7e2;font:13px/1.55 "JetBrains Mono","IBM Plex Mono",ui-monospace,monospace;padding:12px 14px;white-space:pre-wrap}
 .term .dim{color:#8f8d87}.term .g{color:#86d993}.term .r{color:#ff958a}.term .y{color:#f2c86b}.term .b{color:#93bcff}.term b{color:#fff}`;
 function renderMock(el) {
@@ -862,15 +927,20 @@ function renderMock(el) {
   const inner = root.querySelector('.root');
   const pins = $$(':scope > hp-pin', el).map((p, i) => ({ i: i + 1, ref: p.getAttribute('ref'), at: p.getAttribute('at'), anchor: p.getAttribute('anchor') || 'tr', title: p.getAttribute('title') || '', html: p.innerHTML }));
   const marks = pins.map((p) => { const b = h('span', { class: 'hp-mpin', 'aria-hidden': 'true' }, String(p.i)); stage.append(b); return b; });
+  const lis = [];
   if (pins.length) {
     const ol = h('ol', { class: 'hp-plegend' });
     pins.forEach((p) => {
       const pk = `p:${key}:${p.i}`;
       const li = h('li', null, h('span', { class: 'n', 'aria-hidden': 'true' }, String(p.i)), h('span', { class: 'b' }, h('b', null, p.title), p.html.trim() ? h('span', { html: ' ' + p.html }) : null), commentButton(pk, `注記 ${p.i}`));
-      ol.append(li);
+      ol.append(li); lis.push(li);
       registerTarget(pk, { where: `${no} · 注記 ${p.i}`, quote: p.title, anchor: li, place: (card) => li.append(card) });
     });
     fig.append(ol);
+    // 注記の行と mock の番号を、マウスを載せたときとキーボードで入ったときに互いに強調する
+    const link = (i, on) => { marks[i].classList.toggle('hl', on); lis[i].classList.toggle('hl', on); };
+    lis.forEach((li, i) => { li.addEventListener('mouseenter', () => link(i, true)); li.addEventListener('mouseleave', () => link(i, false)); li.addEventListener('focusin', () => link(i, true)); li.addEventListener('focusout', () => link(i, false)); });
+    marks.forEach((b, i) => { b.addEventListener('mouseenter', () => link(i, true)); b.addEventListener('mouseleave', () => link(i, false)); });
   }
   if (el.getAttribute('caption')) fig.append(h('div', { class: 'hp-caption' }, el.getAttribute('caption')));
   el.replaceChildren(fig);
@@ -915,7 +985,7 @@ function renderWhy(el) {
   el.replaceChildren(det);
 }
 
-/* ── hp-ask: 判断。読み手が選び直すか「この案で確定」を押すまでは未確認 ── */
+/* ── hp-ask: 判断。読み手が選び直すか「この案で確定」を押すまでは未回答 ── */
 function renderAsk(el, idx, total, claimSrc) {
   const id = el.id || `ask${idx + 1}`;
   const q = el.querySelector(':scope > p'); const qText = q ? q.textContent.trim() : (el.getAttribute('q') || '');
@@ -946,7 +1016,7 @@ function renderAsk(el, idx, total, claimSrc) {
   note.addEventListener('input', () => { if (note.value.trim()) S.notes[id] = note.value; else delete S.notes[id]; save(); composerSync(); });
   const status = h('span', { class: 'hp-ask-status', 'aria-live': 'polite' });
   const confirm = h('button', { type: 'button', class: 'hp-btn primary small hp-confirm' }, icon('check'), 'この案で確定');
-  const later = h('button', { type: 'button', class: 'hp-btn small', hidden: '' }, '次の未確認へ', h('kbd', null, 'n'));
+  const later = h('button', { type: 'button', class: 'hp-btn small', hidden: '' }, '次の未回答へ', h('kbd', null, 'n'));
   const sumBtn = h('button', { type: 'button', class: 'hp-ask-sum' });
   fs.append(note, h('div', { class: 'hp-ask-foot' }, status, confirm, later), sumBtn);
   const anchor = h('button', { type: 'button', class: 'hp-ask-anchor' });
@@ -975,12 +1045,12 @@ function renderAsk(el, idx, total, claimSrc) {
   anchor.addEventListener('click', () => openAsk(a, { focus: true }));
   // シートを閉じたあとに、答えた判断を畳む。開いているあいだは畳まない(コピーの演出と同時に動かさない)
   a.settle = () => { if (a.state() !== 'pending') a.fold(true); };
-  // マウスで未確認の判断に答えたら、枠が滑り終わるのを見せてから次へ進む。提案の案をもう一度押すと確定になる
+  // マウスで未回答の判断に答えたら、枠が滑り終わるのを見せてから次へ進む。提案の案をもう一度押すと確定になる
   opts.addEventListener('click', (e) => {
     if (!e.target.matches('input') || modality !== 'pointer') return;
     const was = a.state();
     S.answers[id] = values(); S.confirmed[id] = true; save(); place(!live()); refresh();
-    if (was === 'pending' && e.target.type === 'radio') { clearTimeout(a.adv); a.adv = setTimeout(() => nextAsk(a), 420); }
+    if (was === 'pending' && e.target.type === 'radio') { clearTimeout(a.adv); a.adv = setTimeout(() => nextAsk(a), 260); }   // 選択の枠の移動(200ms)を見せてから進む
   });
   note.addEventListener('focus', () => clearTimeout(a.adv));
   asks.push(a);
@@ -1022,18 +1092,50 @@ function nextAsk(from) {
   if (live()) overallEl?.focus({ preventScroll: true }); else $('.hp-go')?.focus();
 }
 
+/* ── 未回答と回答済みの欄 ── */
+// 開いている判断は動かさず、畳んだときに欄を移す。答えた瞬間に動かすと、見ている枠が跳ぶ
+const listPend = h('div', { class: 'hp-alist' }), listDone = h('div', { class: 'hp-alist' });
+const countPend = h('span', { class: 'n' }), countDone = h('span', { class: 'n' });
+const secPend = h('section', { class: 'hp-asec', 'aria-label': '未回答の判断' }, h('h3', { class: 'hp-asec-h' }, '未回答', countPend), listPend);
+const secDone = h('section', { class: 'hp-asec', 'aria-label': '回答済みの判断' }, h('h3', { class: 'hp-asec-h' }, '回答済み', countDone), listDone);
+function sortAsks() {
+  const focused = document.activeElement;
+  const heads = [secPend, secDone].map((s) => s.firstElementChild), wasHidden = secDone.hidden;
+  const items = [...asks.map((a) => a.fs), ...heads], before = live() ? new Map(items.map((el) => [el, el.getBoundingClientRect()])) : null;
+  const movedAsks = new Set();
+  [[listPend, (a) => a.state() === 'pending'], [listDone, (a) => a.state() !== 'pending']].forEach(([list, want]) => {
+    asks.forEach((a) => { if (!want(a) || a.fs.parentElement === list) return; if (a.fs.parentElement && !a.fs.hasAttribute('data-compact') && a.fs._foldT == null) return; const next = asks.slice(asks.indexOf(a) + 1).find((x) => x.fs.parentElement === list); if (a.fs.parentElement) movedAsks.add(a.fs); list.insertBefore(a.fs, next?.fs || null); });
+  });
+  if (focused && focused !== document.activeElement && document.contains(focused)) focused.focus({ preventScroll: true });   // 移した判断の中にあったフォーカスを戻す
+  const p = asks.filter((a) => a.state() === 'pending').length;
+  countPend.textContent = p; countDone.textContent = asks.length - p;
+  secPend.hidden = !p; secDone.hidden = p === asks.length;
+  if (!before || !movedAsks.size) return;
+  items.forEach((el) => {
+    const b = before.get(el), a = el.getBoundingClientRect(); if (!b.height || !a.height) return;
+    const dy = b.top - a.top; if (Math.abs(dy) < 1) return;
+    if (movedAsks.has(el)) { el.style.position = 'relative'; el.style.zIndex = '1'; }   // 移る判断はほかの行の上を通す
+    el.animate([{ translate: `0 ${dy}px` }, { translate: '0 0' }], SP.move).onfinish = () => { el.style.position = ''; el.style.zIndex = ''; };
+  });
+  if (wasHidden && !secDone.hidden) heads[1].animate([{ opacity: 0 }, { opacity: 1 }], SP.swap);
+}
+
 /* ── 状態の表示 ── */
+// 判断の状態の印。Linear の状態の印に合わせ、未回答は空の円、回答はチェック入りの塗りの円(提案と違う案なら変更の色)。
+// claim の一覧では、判断の一部だけに回答した状態を半円にする。どの場所でも同じ印を使う
+const mark = (st, label) => h('span', { class: 'hp-mark', 'data-state': st, ...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': 'true' }) });
+const tocMarks = [];
 function refresh() {
+  machineHooks.forEach((f) => f());
   asks.forEach((a) => {
     const st = a.state(); a.fs.dataset.state = st;
-    const proposed = a.inputs.filter((i) => a.defaults.includes(i.value)).map(labelOf).join('、');
-    a.status.textContent = st === 'pending' ? `未確認 · 提案は ${proposed || 'なし'}` : st === 'changed' ? `変更 · 提案は ${proposed || 'なし'}` : '提案どおり';
+    a.status.textContent = HP.STATUS[st];
     a.confirm.hidden = st !== 'pending';
     a.later.hidden = st === 'pending' || !asks.some((x) => x.state() === 'pending');
     const picked = a.inputs.filter((i) => i.checked).map(labelOf).join('、') || '選択なし';
     a.anchor.dataset.state = st;
-    a.anchor.replaceChildren(h('span', { class: 'n' }, `判断 ${a.label}/${a.total}`), h('span', { class: 'q' }, a.q), h('span', { class: 'a' }, picked), h('span', { class: 's' }, st === 'pending' ? '未確認' : st === 'changed' ? '変更' : '提案どおり'));
-    a.sumBtn.replaceChildren(st === 'pending' ? h('span', { class: 'ring', 'aria-hidden': 'true' }) : icon('check'), h('span', { class: 'q' }, a.q), h('span', { class: st === 'pending' ? 'a muted' : 'a' }, picked), ...(st === 'changed' ? [h('span', { class: 'tag' }, '変更')] : []));
+    a.anchor.replaceChildren(mark(st), h('span', { class: 'n' }, `判断 ${a.label}/${a.total}`), h('span', { class: 'q' }, a.q), h('span', { class: 'a' }, picked), h('span', { class: 's' }, HP.STATUS[st]));
+    a.sumBtn.replaceChildren(mark(st, HP.STATUS[st]), h('span', { class: 'q' }, a.q), h('span', { class: st === 'pending' ? 'a muted' : 'a' }, picked), ...(st === 'changed' ? [h('span', { class: 'tag' }, '変更')] : []));
   });
   $$('hp-claim').forEach((c) => {
     const badges = c._head?.querySelector('.hp-badges'); if (!badges) return;
@@ -1045,18 +1147,20 @@ function refresh() {
     const bk = `${pend}|${changed}|${com}`; if (badges._k === bk) return;
     const first = badges._k == null; badges._k = bk;
     fill(badges,
-      pend ? h('span', { class: 'hp-badge pending' }, `未確認 ${pend}`) : null,
+      pend ? h('span', { class: 'hp-badge pending' }, `未回答 ${pend}`) : null,
       changed ? h('span', { class: 'hp-badge changed' }, `変更 ${changed}`) : null,
       com ? h('span', { class: 'hp-badge' }, `コメント ${com}`) : null);
-    if (!first && live()) [...badges.children].forEach((x) => x.animate([{ opacity: 0, scale: 0.8, filter: 'blur(4px)' }, { opacity: 1, scale: 1, filter: 'blur(0)' }], SP.swap));
+    if (!first && live()) [...badges.children].forEach((x) => x.animate(FADE, SP.swap));
   });
+  tocMarks.forEach(([c, m]) => { const own = asks.filter((a) => c.contains(a.el)); const done = own.filter((a) => a.state() !== 'pending').length; const st = !own.length ? 'none' : !done ? 'pending' : done < own.length ? 'partial' : 'confirmed'; m.dataset.state = st; if (st === 'none') { m.removeAttribute('role'); m.removeAttribute('aria-label'); m.setAttribute('aria-hidden', 'true'); } else { m.removeAttribute('aria-hidden'); m.setAttribute('role', 'img'); m.setAttribute('aria-label', st === 'pending' ? '判断は未回答' : st === 'partial' ? '判断の一部に回答済み' : '判断はすべて回答済み'); } });
+  sortAsks();
   const pend = asks.filter((a) => a.state() === 'pending').length;
   const num = $('.hp-prog-n'); if (num) roll(num, asks.length - pend);
   $$('.hp-seg-b').forEach((d, i) => { const st = asks[i].state(); d.dataset.state = st; const lb = `判断 ${asks[i].label}: ${HP.STATUS[st]}`; d.setAttribute('aria-label', lb); d.title = lb; });
   $$('.hp-dot').forEach((d, i) => {
-    const st = asks[i].state(), was = d.dataset.state; d.dataset.state = st;
+    const st = asks[i].state(), m = d.firstElementChild, was = m.dataset.state; m.dataset.state = st;
     const lb = `判断 ${asks[i].label}: ${HP.STATUS[st]}`; d.setAttribute('aria-label', lb); d.title = lb;
-    if (was && was !== st && live()) d.animate([{ scale: 0.4 }, { scale: 1 }], { ...SP.pop, pseudoElement: '::before' });
+    if (was && was !== st && live()) m.animate([{ scale: 0.6 }, { scale: 1 }], SP.pop);
   });
   const respond = $('.hp-respond');
   respond?.classList.toggle('accent', !pend); respond?.classList.toggle('primary', !!pend);
@@ -1104,17 +1208,17 @@ async function connectClaude() {
   try { const [db, comments] = await Promise.all([c.use('db'), c.use('comments')]); if (db && comments) CL = { db, comments }; } catch {}
 }
 const SEND_ERR = {
-  consent_required: 'ページからのコメントが許可されなかったので、送信していない。「コピーで返す」を押してください。',
-  forbidden: 'このページからはコメントできない。「コピーで返す」を押してください。',
-  claude_unavailable: 'Claude のセッションに届けられない。「コピーで返す」を押してください。',
-  rate_limited: '短時間に送信が集中したため、送信できなかった。少し待ってからもう一度押してください。',
+  consent_required: 'コメントが許可されなかったため、送信できませんでした。「コピーで返す」を押してください。',
+  forbidden: 'このページからはコメントできません。「コピーで返す」を押してください。',
+  claude_unavailable: 'Claude のセッションに届けられません。「コピーで返す」を押してください。',
+  rate_limited: '短時間に送信が集中したため、送信できませんでした。少し待ってからもう一度押してください。',
 };
 function buildDialogs() {
   const status = h('p', { class: 'hp-dlg-status', role: 'status' });
   const sum = h('p', { class: 'hp-dlg-sum' });
   const warn = h('p', { class: 'hp-dlg-warn' });
   const conf = h('div', { class: 'hp-dlg-conf' });
-  const overall = h('textarea', { class: 'hp-field hp-overall', rows: '3', placeholder: '対象を選ばない指摘や、足りないニュアンス' });
+  const overall = h('textarea', { class: 'hp-field hp-overall', rows: '3', placeholder: '特定の箇所に付けられない指摘を書く' });
   const out = h('textarea', { class: 'hp-out', spellcheck: 'false' });
   const swap = (t) => h('span', { class: 'hp-swap' }, t);
   const proceed = h('button', { type: 'button', class: 'hp-btn primary hp-go' }, swap(HP.VERDICT.proceed), h('kbd', null, 'Ctrl+Enter'));
@@ -1128,7 +1232,7 @@ function buildDialogs() {
   const tabA = h('button', { type: 'button', class: 'hp-tab', role: 'tab', id: 'hp-tab-answer', 'data-tab': 'answer', 'aria-controls': 'hp-panel-answer' }, '判断と指摘');
   const editedDot = h('span', { class: 'dot', hidden: '', title: '手編集あり' });
   const tabB = h('button', { type: 'button', class: 'hp-tab', role: 'tab', id: 'hp-tab-body', 'data-tab': 'body', 'aria-controls': 'hp-panel-body' }, '本文', editedDot);
-  const asksBox = h('div', { class: 'hp-asks' }, ...asks.map((a) => a.fs));
+  const asksBox = h('div', { class: 'hp-asks' }, secPend, secDone);
   const clist = h('ul', { class: 'hp-clist' });
   const cwrap = h('div', { hidden: '' }, h('span', { class: 'hp-sub' }, 'コメント'), clist);
   const panelA = h('div', { role: 'tabpanel', id: 'hp-panel-answer', 'aria-labelledby': 'hp-tab-answer' },
@@ -1153,7 +1257,6 @@ function buildDialogs() {
     tabA.setAttribute('aria-selected', String(!body)); tabB.setAttribute('aria-selected', String(body));
     tabA.tabIndex = body ? -1 : 0; tabB.tabIndex = body ? 0 : -1;
     placeThumb();
-    if (live()) (body ? panelB : panelA).animate(blurIn(6, 3), SP.swap);
   };
   tabA.onclick = () => showTab('answer'); tabB.onclick = () => showTab('body');
   [tabA, tabB].forEach((t) => t.addEventListener('keydown', (e) => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); const nx = t === tabA ? tabB : tabA; nx.click(); nx.focus(); }));
@@ -1173,7 +1276,7 @@ function buildDialogs() {
     let hand = '';
     if (S.draft) { const ops = HP.diffOps(S.draft.base, S.draft.text); hand = ` · 手編集 +${ops.filter((o) => o[0] === '+').length} −${ops.filter((o) => o[0] === '-').length} 行`; }
     sum.textContent = HP.statusLine(m, false).replace('状況: ', '') + hand;
-    warn.textContent = [pend ? `未確認が ${pend} 件ある。このまま返すと、Claude が未確認の判断をチャットで確認する。` : '', S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継いだ。` : ''].filter(Boolean).join(' ');
+    warn.textContent = S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継ぎました。` : '';
     discard.hidden = !S.draft; editedDot.hidden = !S.draft;
     const keys = Object.keys(S.comments).filter((k) => targets.has(k));
     cwrap.hidden = !keys.length;
@@ -1186,7 +1289,7 @@ function buildDialogs() {
       const drop = () => { S.draft.conflicts.splice(i, 1); save(); render(); };
       const use = () => { S.draft.text = HP.applyConflict(S.draft.text, c); drop(); };
       return h('div', { class: 'hp-conf' },
-        h('p', null, 'ページでの変更と手編集が同じ行を変更している。いまは手編集を残している。'),
+        h('p', null, 'ページでの変更と手編集が同じ行を変更しています。いまは手編集を残しています。'),
         h('div', { class: 'hp-conf-side' }, h('b', null, '手編集'), h('pre', null, c.mine.join('\n') || '(手編集で消した)')),
         h('div', { class: 'hp-conf-side' }, h('b', null, 'ページでの変更'), h('pre', null, c.theirs.join('\n') || '(この行はなくなった)')),
         h('div', { class: 'hp-dlg-acts' },
@@ -1216,8 +1319,8 @@ function buildDialogs() {
     ta.remove(); return ok;
   };
   const copyBack = async (verdict, btn) => {
-    if (await toClipboard(HP.response(verdict))) { if (btn) flash(btn, 'コピーした'); status.textContent = 'コピーした。Claude Code に貼り付けてください。'; }
-    else { showTab('body'); out.focus(); out.select(); status.textContent = 'コピーできない。本文を選択したので、手でコピーしてください。'; }
+    if (await toClipboard(HP.response(verdict))) { if (btn) flash(btn, 'コピーしました'); status.textContent = 'コピーしました。Claude Code に貼り付けてください。'; }
+    else { showTab('body'); out.focus(); out.select(); status.textContent = 'コピーできませんでした。本文を選択したので、手でコピーしてください。'; }
   };
   const sendBack = async (verdict, btn) => {
     proceed.disabled = revise.disabled = true; status.textContent = '送信中…';
@@ -1226,8 +1329,8 @@ function buildDialogs() {
       const state = HP.statusLine(m, !!S.draft);
       await CL.db.doc(`responses/${id}`).set({ title: m.title, verdict, markdown: HP.response(verdict), createdAt: new Date().toISOString() });
       await CL.comments.sendToClaude({ anchor: await CL.comments.anchorFor($('hp-plan h1') || $('hp-plan')), text: `html-plan の回答「${m.title}」\n${HP.nextLine(verdict)}\n${state}\n全文は db の responses/${id} にある。` });
-      flash(btn, '送った'); status.textContent = 'Claude に送った。返信はこのページのコメントに届く。';
-    } catch (e) { status.textContent = SEND_ERR[e?.code] || `送信できなかった(${e?.code || e?.message || e})。「コピーで返す」を押してください。`; copyOnly.hidden = false; }
+      flash(btn, '送信しました'); status.textContent = 'Claude に送りました。返信はこのページのコメントに届きます。';
+    } catch (e) { status.textContent = SEND_ERR[e?.code] || `送信できませんでした(${e?.code || e?.message || e})。「コピーで返す」を押してください。`; copyOnly.hidden = false; }
     finally { proceed.disabled = revise.disabled = false; }
   };
   const submit = (verdict, btn) => (sendable ? sendBack : copyBack)(verdict, btn);
@@ -1238,7 +1341,7 @@ function buildDialogs() {
   // 狭い画面: 回答のボタンがシートに広がる(clip-path と translate だけで描く)
   const pill = (to, r) => {
     const lx = Math.max(0, to.width - r.width - 20), ly = Math.max(0, to.height - r.height - 16);
-    return { clip: `inset(${ly}px ${to.width - lx - r.width}px ${to.height - ly - r.height}px ${lx}px round 0px)`, move: `${r.left - (to.left + lx)}px ${r.top - (to.top + ly)}px`, color: $('.hp-respond').classList.contains('accent') ? 'var(--accent)' : 'var(--ink)' };
+    return { clip: `inset(${ly}px ${to.width - lx - r.width}px ${to.height - ly - r.height}px ${lx}px round 6px)`, move: `${r.left - (to.left + lx)}px ${r.top - (to.top + ly)}px`, color: $('.hp-respond').classList.contains('accent') ? 'var(--accent)' : 'var(--ink)' };
   };
   const FULL = 'inset(0px 0px 0px 0px round 0px)';
   const morphIn = (trigger) => {
@@ -1246,7 +1349,7 @@ function buildDialogs() {
     const cover = h('div', { class: 'hp-cmp-cover', 'aria-hidden': 'true', style: `background:${a.color}` }); dlg.append(cover);
     dlg.animate([{ clipPath: a.clip, translate: a.move }, { clipPath: FULL, translate: '0 0' }], SP.panel);
     cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 70, easing: OUT }).onfinish = () => cover.remove();   // 広がる途中で色の塊に見えないよう、先に消す
-    kids.forEach((k, i) => k.animate(blurIn(10), { ...SP.swap, delay: 70 + i * 40, fill: 'backwards' }));
+    kids.forEach((k, i) => k.animate(blurIn(10), { ...SP.swap, delay: Math.min(i, 4) * 20, fill: 'backwards' }));   // 全体で 300ms 未満
   };
   const closePanel = () => {
     if (!dlg.matches(':modal') || dlg._closing) return;
@@ -1272,7 +1375,7 @@ function buildDialogs() {
   document.body.append(dlg);
   const help = h('dialog', { class: 'hp-dialog hp-help', 'aria-labelledby': 'hp-help-title' },
     h('h2', { id: 'hp-help-title' }, 'キーボード操作'),
-    h('dl', null, ...[['n', '次の未確認の判断へ'], ['1–9', '判断の選択肢を選ぶ'], ['Enter', '判断: この案で確定 / 呼び出し: コードを開く'], ['j / k', '次 / 前の claim へ'], ['c', 'フォーカス中の claim・行にコメント'], ['x', '呼び出しの変更を取り消す'], ['↑ ↓', 'コードと呼び出しの行を移動'], ['o / O', 'すべて開く / すべて閉じる'], ['r', '全体への指摘へ'], ['Ctrl+Enter', '回答: 実装に進める(入力欄の中では働かない)'], ['?', 'この一覧'], ['Esc', '閉じる']].flatMap(([k, v]) => [h('dt', null, h('kbd', null, k)), h('dd', null, v)])),
+    h('dl', null, ...[['n', '次の未回答の判断へ'], ['1–9', '判断の選択肢を選ぶ'], ['Enter', '判断: この案で確定 / 呼び出し: コードを開く'], ['j / k', '次 / 前の claim へ'], ['c', 'フォーカス中の claim・行にコメント'], ['x', '呼び出しの変更を取り消す'], ['↑ ↓', 'コードと呼び出しの行を移動'], ['o / O', 'すべて開く / すべて閉じる'], ['r', '全体への指摘へ'], ['Ctrl+Enter', '回答: 実装に進める(入力欄の中では働かない)'], ['?', 'この一覧'], ['Esc', '閉じる']].flatMap(([k, v]) => [h('dt', null, h('kbd', null, k)), h('dd', null, v)])),
     h('div', { class: 'hp-dlg-acts' }, h('span', { class: 'grow' }), h('button', { type: 'button', class: 'hp-btn', onclick: () => help.close() }, '閉じる')));
   document.body.append(help);
   HP.showTab = showTab;
@@ -1287,7 +1390,7 @@ function buildDialogs() {
     try {
       const v = await CL.comments.canSendToClaude();
       sendable = v === 'available'; copyOnly.hidden = !sendable;
-      if (v === 'writers_only') status.textContent = '編集権限がないので Claude には送れない。下のボタンで回答をコピーしてください。';
+      if (v === 'writers_only') status.textContent = '編集権限がないので Claude には送れません。下のボタンで回答をコピーしてください。';
     } catch { sendable = false; }
   };
   HP.checkSend = checkSend;
@@ -1299,7 +1402,7 @@ function buildDialogs() {
       const animate = !instant && live();
       const trigger = animate ? $('.hp-respond').getBoundingClientRect() : null;   // 開くとバーが消えるので、先に測る
       dlg.showModal(); placeThumb();
-      if (animate) morphIn(trigger);
+      if (animate) morphIn(trigger); else if (!instant && softly()) dlg.animate(FADE, SOFT);
     }
     if (!keepFocus) { showTab('answer'); overall.focus({ preventScroll: true }); }
     await checkSend();
@@ -1326,13 +1429,13 @@ function buildChrome(plan) {
   if (h1) h1.after(meta); else plan.prepend(meta);
   const levelOne = $$(':scope > hp-claim', plan).filter((c) => !c.getAttribute('kind'));
   if (levelOne.length) {
-    const toc = h('ol', { class: 'hp-toc', 'aria-label': '要点' }, ...levelOne.map((c) => h('li', null, h('button', { type: 'button', class: 'hp-toc-b', onclick: () => go(c) }, h('span', { class: 'hp-toc-n' }, c._no), h('span', { html: c._head.querySelector('.hp-claim-text').innerHTML })))));
+    const toc = h('ol', { class: 'hp-toc', 'aria-label': '要点' }, ...levelOne.map((c) => h('li', null, h('button', { type: 'button', class: 'hp-toc-b', onclick: () => go(c) }, (() => { const m = mark('none'); tocMarks.push([c, m]); return m; })(), h('span', { class: 'hp-toc-n' }, c._no), h('span', { html: c._head.querySelector('.hp-claim-text').innerHTML })))));
     $(':scope > hp-claim', plan)?.before(toc);
   }
   const bar = h('div', { class: 'hp-bar', role: 'region', 'aria-label': '回答の状況' },
     h('span', { class: 'hp-prog', 'aria-live': 'polite' }, ...(asks.length ? ['判断 ', h('b', { class: 'hp-prog-n' }), `/${asks.length}`] : ['判断なし'])),
-    asks.length ? h('span', { class: 'hp-dots' }, ...asks.map((a) => h('button', { type: 'button', class: 'hp-dot', onclick: () => openAsk(a, { focus: true }) }))) : null,
-    h('button', { type: 'button', class: 'hp-btn hp-next', onclick: () => nextAsk() }, '次の未確認', h('kbd', null, 'n')),
+    asks.length ? h('span', { class: 'hp-dots' }, ...asks.map((a) => h('button', { type: 'button', class: 'hp-dot', onclick: () => openAsk(a, { focus: true }) }, mark('pending')))) : null,
+    h('button', { type: 'button', class: 'hp-btn hp-next', onclick: () => nextAsk() }, '次の未回答', h('kbd', null, 'n')),
     h('button', { type: 'button', class: 'hp-btn primary hp-respond', onclick: () => { HP.openRespond(false, !!nowAsk); if (nowAsk) openAsk(nowAsk, { focus: true }); } }, '回答を書く', h('kbd', null, 'r')));
   document.body.append(bar);
 }
@@ -1392,10 +1495,10 @@ function boot() {
   connectClaude().then(() => HP.checkSend());
   if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) setTimeout(() => go(t), 50); }
   if (!calm()) {
-    [$('h1', plan), $('.hp-meta', plan), $('details.hp-why', plan), $('.hp-toc', plan), ...$$(':scope > hp-claim', plan)].filter(Boolean).slice(0, 7).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 8px' }, { opacity: 1, translate: '0 0' }], { duration: 300, easing: OUT, delay: i * 40, fill: 'backwards' }));
+    [$('h1', plan), $('.hp-meta', plan), $('details.hp-why', plan), $('.hp-toc', plan), ...$$(':scope > hp-claim', plan)].filter(Boolean).slice(0, 4).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 8px' }, { opacity: 1, translate: '0 0' }], { ...SP.swap, delay: i * 30, fill: 'backwards' }));   // 4 つまで 30ms ずつ。全体で 300ms 未満
     const rail = $('.hp-composer');
-    if (rail?.open) rail.animate([{ opacity: 0, translate: '14px 0' }, { opacity: 1, translate: '0 0' }], { ...SP.panel, delay: 120, fill: 'backwards' });
-    else $('.hp-bar')?.animate(blurIn(16, 4), { ...SP.panel, delay: 260, fill: 'backwards' });
+    if (rail?.open) rail.animate([{ opacity: 0, translate: '14px 0' }, { opacity: 1, translate: '0 0' }], { ...SP.swap, delay: 60, fill: 'backwards' });
+    else $('.hp-bar')?.animate(blurIn(16, 4), { ...SP.swap, delay: 60, fill: 'backwards' });
   }
   document.documentElement.dataset.hpReady = '1';
 }

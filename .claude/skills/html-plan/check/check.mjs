@@ -1,21 +1,28 @@
 #!/usr/bin/env node
-// check.mjs — pack した計画ページを実ブラウザで開き、目で見る前に機械で分かる問題を検査する。
-//   node check.mjs plan.packed.html [--out <dir>] [--browser <chromium のパス>]
+// check.mjs — html-plan の runtime を変えたときに、実ブラウザで回帰を検査する開発用の script。計画を書くときには要らない。
+//   node check.mjs [plan.packed.html] [--full] [--out <dir>] [--browser <chromium のパス>]
+// page を渡さなければ、examples/reminders.html の全検査と examples/parts.html の見た目の検査をする。
+// page を渡すと見た目の検査だけをする(操作の検査は例の計画の判断や schema を前提にしている)。--full で操作も検査する。依存の導入と Chromium が要る。
 // 3 つの幅で、axe-core(WCAG 2.2 AA)、横のはみ出し、mock の幅超え、state 図のラベルの重なりを調べ、
 // 全体の screenshot を保存する。OS が dark でも light で描くことを確かめる。キーボードだけで
 // 判断・コメント・取り消し・編集・回答まで進められるか、回答のシートの手編集・merge・衝突・
 // 次の動き・送信が働くか、動きが瞬間移動せずキーボードと reduced motion で止まるかを確かめる。問題があれば exit 1。
 import { chromium } from 'playwright-core';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve, basename } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, basename, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null; };
-const page0 = args.find((a, i) => !a.startsWith('--') && !['--out', '--browser'].includes(args[i - 1]));
-if (!page0) { console.error('usage: node check.mjs plan.packed.html [--out <dir>] [--browser <path>]'); process.exit(2); }
+let page0 = args.find((a, i) => !a.startsWith('--') && !['--out', '--browser'].includes(args[i - 1]));
+const here = dirname(fileURLToPath(import.meta.url));
+const DEFAULT = !page0, FULL = DEFAULT || args.includes('--full');
+const packTo = (src, name) => { const p = resolve(mkdtempSync(resolve(tmpdir(), 'html-plan-check-')), name); execFileSync(process.execPath, [resolve(here, '../runtime/pack.mjs'), resolve(here, src), '-o', p], { stdio: 'ignore' }); return p; };
+if (DEFAULT) page0 = packTo('../examples/reminders.html', 'reminders.packed.html');
 const url = pathToFileURL(resolve(page0)).href;
 const out = resolve(opt('--out') || resolve(page0, '..', basename(page0, '.html') + '.check'));
 mkdirSync(out, { recursive: true });
@@ -108,6 +115,7 @@ for (const width of [390, 768, 1280]) {
   await l.ctx.close(); await d.ctx.close();
 }
 
+if (FULL) {
 /* ── キーボードだけで最後まで進めるか ── */
 {
   const { ctx, page, logs } = await open({ width: 1280, height: 900 }, 'light');
@@ -116,14 +124,18 @@ for (const width of [390, 768, 1280]) {
   const active = () => page.evaluate(() => { const a = document.activeElement; return { tag: a?.tagName, ask: !!a?.closest('fieldset.hp-ask'), cls: a?.className || '', text: (a?.textContent || '').trim().slice(0, 40) }; });
   const pending = () => page.evaluate(() => +document.documentElement.dataset.hpPending);
   const total = await pending();
+  const secs = () => page.evaluate(() => [...document.querySelectorAll('.hp-asec')].filter((s) => !s.hidden).map((s) => s.querySelector('.hp-asec-h').textContent).join(' / '));
+  if (await secs() !== `未回答${total}`) fail(`答える前の欄が「未回答${total}」だけでない(${await secs()})`);
+  if ((await page.evaluate(() => document.querySelector('.hp-composer').textContent)).includes('チャットで確認')) fail('未回答の欄の代わりに案内の文が残っている');
   await page.keyboard.press('n');
-  if (!(await active()).ask) fail('n で未確認の判断に移らない');
+  if (!(await active()).ask) fail('n で未回答の判断に移らない');
   await page.keyboard.press('2'); await settle(page);
+  if (total > 1 && await secs() !== `未回答${total - 1} / 回答済み1`) fail(`1件答えたあとの欄の件数が合わない(${await secs()})`);
   for (let i = 0; i < 12 && (await pending()) > 0; i++) {
-    await page.keyboard.press('n'); if (!(await active()).ask) { fail('n で次の未確認の判断に移らない'); break; }
+    await page.keyboard.press('n'); if (!(await active()).ask) { fail('n で次の未回答の判断に移らない'); break; }
     await page.keyboard.press('Enter'); await settle(page);
   }
-  if (await pending()) fail(`判断が ${await pending()} 件未確認のまま残った`);
+  if (await pending()) fail(`判断が ${await pending()} 件未回答のまま残った`);
   // claim にコメントする
   await page.keyboard.press('O'); await page.keyboard.press('j');
   if (!(await active()).cls.includes('hp-toggle')) fail('j で claim の見出しに移らない');
@@ -157,7 +169,7 @@ for (const width of [390, 768, 1280]) {
   const expect = { '## 判断': '判断の節', '**変更**': '変えた判断', '提案どおり': '確認した判断', '期限のないタスク': 'claim へのコメント', 'ここは 404': '行へのコメント', '## 編集': '編集の節', '+ALTER TABLE': '編集の diff' };
   if (strikeRow) expect['## 取り消し'] = '取り消しの節';
   Object.entries(expect).forEach(([s, what]) => { if (!md.includes(s)) fail(`回答に${what}がない(「${s}」)`); });
-  if (md.includes('未確認')) fail('すべて確認したのに回答に「未確認」が残る');
+  if (md.includes('未回答')) fail('すべて答えたのに回答に「未回答」が残る');
   if (md.indexOf('期限のないタスク') > md.indexOf('ここは 404')) fail('回答のコメントがページ上の順に並んでいない');
   writeFileSync(resolve(out, 'response.md'), md);
   await page.keyboard.press('Escape');
@@ -274,11 +286,11 @@ for (const width of [390, 768, 1280]) {
     await c.page.evaluate(() => document.querySelectorAll('.hp-confirm').forEach((b) => b.click()));
     await c.page.fill('.hp-overall', '前の版への指摘');
     await c.page.evaluate(() => { const n = [...document.querySelectorAll('.hp-ask-note')].at(-1); n.value = '最後の判断の補足'; n.dispatchEvent(new Event('input', { bubbles: true })); }); await settle(c.page);
-    if (!(await head()).includes(`判断 ${total}/${total} 確認済み`)) errors.push('再発行: 検査の準備で全判断を確認済みにできない');
+    if (!(await head()).includes(`判断 ${total}/${total} 回答済み`)) errors.push('再発行: 検査の準備で全判断を回答済みにできない');
     await swap(v2);
     let md = await head();
-    if (!md.includes(`判断 ${keep}/${total} 確認済み`)) errors.push(`再発行: 変わっていない判断だけを引き継いでいない(${md.split('\n')[2]})`);
-    if (keep && !(await c.page.locator('.hp-dlg-warn').textContent()).includes(`判断 ${keep} 件は、前の版の回答を引き継いだ`)) errors.push('再発行: 引き継いだことが画面に出ない');
+    if (!md.includes(`判断 ${keep}/${total} 回答済み`)) errors.push(`再発行: 変わっていない判断だけを引き継いでいない(${md.split('\n')[2]})`);
+    if (keep && !(await c.page.locator('.hp-dlg-warn').textContent()).includes(`判断 ${keep} 件は、前の版の回答を引き継ぎました`)) errors.push('再発行: 引き継いだことが画面に出ない');
     if (keep === total - 1 && !md.includes('最後の判断の補足')) errors.push('再発行: 引き継いだ判断の補足が消えた');
     if (md.includes('前の版への指摘')) errors.push('再発行: 全体への指摘を引き継いだ');
     await swap(v1);
@@ -287,14 +299,14 @@ for (const width of [390, 768, 1280]) {
     await c.page.evaluate(() => { const n = [...document.querySelectorAll('.hp-ask-note')].at(-1); n.value = '前の版にあとから書いた補足'; n.dispatchEvent(new Event('input', { bubbles: true })); }); await settle(c.page);
     await swap(v2);
     md = await head();
-    if (!md.includes(`判断 ${keep}/${total} 確認済み`) || md.includes('前の版にあとから書いた補足')) errors.push('再発行: 引き継いだ回答が保存されず、再読み込みで変わる');
+    if (!md.includes(`判断 ${keep}/${total} 回答済み`) || md.includes('前の版にあとから書いた補足')) errors.push('再発行: 引き継いだ回答が保存されず、再読み込みで変わる');
     await swap(v2.replace(/(<hp-ask\b(?![\s\S]*<hp-ask\b))/, '<p>(claim を変更)</p>$1'));
-    if (!(await head()).includes(`判断 ${keepBoth}/${total} 確認済み`)) errors.push(`再発行: claim が変わった判断を引き継いだ(${(await head()).split('\n')[2]})`);
+    if (!(await head()).includes(`判断 ${keepBoth}/${total} 回答済み`)) errors.push(`再発行: claim が変わった判断を引き継いだ(${(await head()).split('\n')[2]})`);
     await swap(v2);
     await c.page.getByRole('button', { name: '回答を消去' }).click(); await c.page.getByRole('button', { name: 'もう一度押すと消去' }).click();
     await c.page.waitForLoadState(); await c.page.waitForSelector('html[data-hp-ready]');
     await swap(v1.replace(/(<hp-ask\b[^>]*>\s*<p>)/, '$1(再度変更)'));
-    if (!(await head()).includes(`判断 0/${total} 確認済み`)) errors.push('再発行: 回答を消去したのに、次の版へ引き継がれた');
+    if (!(await head()).includes(`判断 0/${total} 回答済み`)) errors.push('再発行: 回答を消去したのに、次の版へ引き継がれた');
     c.logs.forEach((m) => errors.push(`再発行: ${m}`));
     await c.ctx.close();
   } else if (/<hp-ask\b/.test(v1)) warns.push('再発行: 直下に <p> のある hp-ask がなく、再発行の検査を省いた');
@@ -318,8 +330,11 @@ for (const width of [390, 768, 1280]) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
   const page = await ctx.newPage(); const logs = [];
   page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
-  await page.goto(url); await page.waitForSelector('html[data-hp-ready]'); await quiet(page);
+  await page.goto(url); await page.waitForSelector('html[data-hp-ready]');
+  const intro = await page.evaluate(() => Math.round(Math.max(0, ...document.getAnimations().map((a) => a.effect.getComputedTiming().endTime))));
+  await quiet(page);
   const fail = (m) => errors.push(`動き: ${m}`);
+  if (intro > 300) fail(`ページを開いたときの動きが全体で ${intro}ms かかる(300ms 以内にする)`);
   const running = (p = page) => p.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && !(a instanceof CSSTransition)).length);
   await page.evaluate(() => window.HtmlPlan.collapseAll());
   const trace = (ms) => page.evaluate((limit) => new Promise((res) => { const el = document.querySelector('hp-claim')._body; const t0 = performance.now(); const hs = []; const f = () => { hs.push(el.getBoundingClientRect().height); if (performance.now() - t0 < limit) requestAnimationFrame(f); else res(hs); }; requestAnimationFrame(f); }), ms);
@@ -332,6 +347,11 @@ for (const width of [390, 768, 1280]) {
   tr = trace(650); await page.click(head); hs = await tr;
   const tail = hs.filter((x) => x > 0).at(-1) ?? 0;
   if (tail / to > 0.02) fail(`claim を閉じると最後に ${Math.round(tail)}px 飛ぶ`);
+  // 閉じる途中で中身が見え直さない(透明になった中身の不透明度が、縮みきる前に戻らない)
+  await page.click(head); await quiet(page);
+  const rebound = page.evaluate(() => new Promise((res) => { const el = document.querySelector('hp-claim')._body; const t0 = performance.now(); let prev = 1, up = 0; const f = () => { const o = +getComputedStyle(el).opacity; if (!el.hidden && el.getBoundingClientRect().height > 1 && o > prev + 0.05) up++; prev = o; if (performance.now() - t0 < 650) requestAnimationFrame(f); else res(up); }; requestAnimationFrame(f); }));
+  await page.click(head);
+  if (await rebound) fail('claim を閉じる途中で、透明になった中身が見え直す(ちらつく)');
   await quiet(page); await page.click(head); await quiet(page);
   tr = trace(650); await page.click(head); await page.waitForTimeout(110); await page.click(head); await page.waitForTimeout(90); await page.click(head); hs = await tr;
   jump = 0; for (let i = 1; i < hs.length; i++) jump = Math.max(jump, Math.abs(hs[i] - hs[i - 1]));
@@ -342,13 +362,27 @@ for (const width of [390, 768, 1280]) {
   // 案を押すと、枠が滑ってから次の判断が開き、左の計画がその claim へ動く
   await page.evaluate(() => window.HtmlPlan.expandAll());
   const before = await page.evaluate(() => document.querySelector('hp-plan').scrollTop);
+  // 答えて次へ進む間に、回答の tab 全体を動かさない(同じ tab を表示し直してぼやけていた)。答えた判断は回答済みの欄へ滑って移る
+  const during = page.evaluate(() => new Promise((res) => { const panel = document.getElementById('hp-panel-answer'); let panelMoved = false, slid = false, staggered = false, badgeMoved = false, openedAt = null; const t0 = performance.now();
+    const f = () => { if (panel.getAnimations().length) panelMoved = true; if (document.querySelectorAll('.hp-alist fieldset.hp-ask').length && [...document.querySelectorAll('fieldset.hp-ask')].some((fs) => fs.getAnimations().some((a) => a.effect.getKeyframes().some((k) => k.translate)))) slid = true;
+      if ([...document.querySelectorAll('fieldset.hp-ask > *')].some((k) => k.getAnimations().some((a) => a.effect.getTiming().delay > 0))) staggered = true;
+      if ([...document.querySelectorAll('.hp-badge')].some((b) => b.getAnimations().some((a) => a.effect.getKeyframes().some((k) => k.scale || k.filter || k.translate)))) badgeMoved = true;
+      if (openedAt == null && [...document.querySelectorAll('fieldset.hp-ask:not([data-compact])')].some((fs) => fs.querySelector('.hp-ask-no')?.textContent.startsWith('判断 2/'))) openedAt = Math.round(performance.now() - t0);
+      if (performance.now() - t0 < 1100) requestAnimationFrame(f); else res({ panelMoved, slid, staggered, badgeMoved, openedAt }); };
+    requestAnimationFrame(f); }));
   await page.click('fieldset.hp-ask:not([data-compact]) label.hp-opt:not(:has(input:checked))'); await page.waitForTimeout(380);
   const ind = await page.evaluate(() => { const f = document.querySelector('fieldset.hp-ask:not([data-compact])'), lb = f.querySelector('label.hp-opt:has(input:checked)'), i = f.querySelector('.hp-opt-ind'), a = i.getBoundingClientRect(), b = lb.getBoundingClientRect(); const top = document.elementFromPoint(b.left + b.width / 2, b.top + 10); return { dy: Math.abs(a.top - b.top), dh: Math.abs(a.height - b.height), label: !!top?.closest('label.hp-opt') }; });
   if (ind.dy > 1 || ind.dh > 1) fail('選択の枠が選んだ案に重ならない');
   if (!ind.label) fail('選択の枠が案の上に被さっている');
   // 畳む前の timer とスクロールは animation に出ないので、次の判断の claim が画面に入るのを待つ
   await page.waitForFunction(() => { const second = document.querySelectorAll('fieldset.hp-ask')[1], r = document.querySelector('.hp-ask-anchor[data-now]')?.getBoundingClientRect(), p = document.querySelector('hp-plan').getBoundingClientRect(); return second && !second.hasAttribute('data-compact') && r && r.top >= p.top && r.bottom <= p.bottom; }, null, { timeout: 3000 }).catch(() => {}); await quiet(page);
-  const flow = await page.evaluate(() => { const fs = [...document.querySelectorAll('fieldset.hp-ask')]; const open = fs.filter((f) => !f.hasAttribute('data-compact')); const anchors = document.querySelectorAll('.hp-ask-anchor[data-now]'); const r = anchors[0]?.getBoundingClientRect(); const p = document.querySelector('hp-plan').getBoundingClientRect(); return { open: open.length, second: open[0] === fs[1], now: anchors.length, inView: r && r.top >= p.top && r.bottom <= p.bottom, top: document.querySelector('hp-plan').scrollTop }; });
+  const moves = await during;
+  if (moves.panelMoved) fail('次の判断へ進むときに、回答の tab 全体が動く(ぼやける)');
+  if (!moves.slid) fail('答えた判断が、回答済みの欄へ滑らずに一瞬で移る');
+  if (moves.staggered) fail('判断を開くときに、中身をずらして出している(答えるたびに起きる動きなので、ずらさない)');
+  if (moves.badgeMoved) fail('claim の見出しの札が、数が変わるたびに動く');
+  if (moves.openedAt == null || moves.openedAt > 400) fail(`案を選んでから次の判断が開くまで ${moves.openedAt ?? '1100 以上'}ms かかる`);
+  const flow = await page.evaluate(() => { const fs = [...document.querySelectorAll('fieldset.hp-ask')]; const open = fs.filter((f) => !f.hasAttribute('data-compact')); const anchors = document.querySelectorAll('.hp-ask-anchor[data-now]'); const r = anchors[0]?.getBoundingClientRect(); const p = document.querySelector('hp-plan').getBoundingClientRect(); return { open: open.length, second: !!open[0]?.querySelector('.hp-ask-no')?.textContent.startsWith('判断 2/'), now: anchors.length, inView: r && r.top >= p.top && r.bottom <= p.bottom, top: document.querySelector('hp-plan').scrollTop }; });
   if (flow.open !== 1 || !flow.second) fail('案を押しても次の判断が開かない');
   if (flow.now !== 1 || !flow.inView) fail('開いた判断の claim が計画の画面内に来ない');
   if (flow.top === before) fail('判断を進めても左の計画が動かない');
@@ -356,15 +390,18 @@ for (const width of [390, 768, 1280]) {
   await page.click('.hp-revise'); await page.waitForTimeout(250);
   if (await page.evaluate(() => document.querySelectorAll('fieldset.hp-ask:not([data-compact])').length) !== 1) fail('回答のボタンで判断が畳まれた');
   // タブの枠は選んだタブに重なる
-  await quiet(page); await page.click('.hp-tab[data-tab="body"]'); await quiet(page);
+  await quiet(page); await page.click('.hp-tab[data-tab="body"]');
+  if (await page.evaluate(() => document.getElementById('hp-panel-body').getAnimations().length)) fail('tab を切り替えると中身が動く');
+  await quiet(page);
   const th = await page.evaluate(() => { const a = document.querySelector('.hp-tab-thumb').getBoundingClientRect(), b = document.querySelector('.hp-tab[aria-selected="true"]').getBoundingClientRect(); return Math.abs(a.left - b.left) + Math.abs(a.width - b.width); });
   if (th > 2) fail('タブの枠が選んだタブに重ならない');
   // 畳み始めた判断を 110ms 以内に開き直しても、あとから畳まれない
   await page.click('.hp-tab[data-tab="answer"]'); await quiet(page);
   const reopened = await page.evaluate(async () => {
     const fs = [...document.querySelectorAll('fieldset.hp-ask')], anchors = [...document.querySelectorAll('.hp-ask-anchor')];
+    const no = (f) => +f.querySelector('.hp-ask-no').textContent.match(/判断 (\d+)\//)[1];
     const cur = fs.findIndex((f) => !f.hasAttribute('data-compact')), other = fs.findIndex((f) => f.hasAttribute('data-compact'));
-    fs[other].querySelector('.hp-ask-sum').click(); anchors[cur].click();
+    fs[other].querySelector('.hp-ask-sum').click(); anchors[no(fs[cur]) - 1].click();
     await new Promise((r) => setTimeout(r, 800));
     const stuck = [...fs[cur].children].filter((k) => k.getClientRects().length && +getComputedStyle(k).opacity < 0.9).length;
     return { open: !fs[cur].hasAttribute('data-compact'), count: fs.filter((f) => !f.hasAttribute('data-compact')).length, stuck };
@@ -392,6 +429,8 @@ for (const width of [390, 768, 1280]) {
   const np = await nc.newPage(); await np.goto(url); await np.waitForSelector('html[data-hp-ready]'); await quiet(np);
   await np.click('.hp-respond');
   if (!(await running(np))) fail('マウスで開いたシートが動かない');
+  const sheetEnd = await np.evaluate(() => Math.round(Math.max(0, ...document.getAnimations().filter((a) => !(a instanceof CSSTransition)).map((a) => a.effect.getComputedTiming().endTime))));
+  if (sheetEnd > 300) fail(`狭い画面のシートが開ききるまで ${sheetEnd}ms かかる(300ms 以内にする)`);
   await np.waitForTimeout(110);
   if (await np.evaluate(() => { const c = document.querySelector('.hp-cmp-cover'); return c && +getComputedStyle(c).opacity > 0.05; })) fail('シートが広がる途中で色の覆いが残る');
   await quiet(np);
@@ -410,10 +449,86 @@ for (const width of [390, 768, 1280]) {
   await r.page.click('hp-claim .hp-toggle');
   const moved = await r.page.evaluate(() => document.getAnimations().flatMap((a) => a.effect?.getKeyframes?.() || []).some((k) => k.translate || k.height || k.filter));
   if (moved) errors.push('動き: reduced motion で位置や高さが動く');
+  // 最初の claim は開いているので、閉じてからもう一度押して開く
+  await r.page.click('hp-claim .hp-toggle');
+  if (await r.page.evaluate(() => document.getAnimations().flatMap((a) => a.effect?.getKeyframes?.() || []).some((k) => k.translate || k.height || k.filter))) errors.push('動き: reduced motion で claim を開くと位置や高さが動く');
+  if (!(await r.page.evaluate(() => document.getAnimations().some((a) => a.effect?.getKeyframes?.().some((k) => k.opacity != null))))) errors.push('動き: reduced motion で claim を開いても何も変わらない(透明度の変化まで止めている)');
   await r.page.click('.hp-respond');
   const moved2 = await r.page.evaluate(() => document.getAnimations().flatMap((a) => a.effect?.getKeyframes?.() || []).some((k) => k.translate || k.clipPath));
   if (moved2) errors.push('動き: reduced motion でシートが動く');
+  if (!(await r.page.evaluate(() => document.getAnimations().some((a) => a.effect?.getKeyframes?.().some((k) => k.opacity != null))))) errors.push('動き: reduced motion でシートを開いても何も変わらない');
   await r.ctx.close();
+}
+
+/* ── 図の動き: 状態図は実際にある遷移だけを点でたどり、画面はちらつかない。取り消しは深さの順に及ぶ。番号と注記は連動する ── */
+{
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
+  const page = await ctx.newPage(); const logs = [];
+  page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
+  await page.goto(url); await page.waitForSelector('html[data-hp-ready]'); await quiet(page);
+  await page.evaluate(() => window.HtmlPlan.expandAll()); await quiet(page);
+  const fail = (m) => errors.push(`図: ${m}`);
+  const mc = page.locator('figure.hp-machine').first();
+  if (await mc.count()) {
+    await mc.scrollIntoViewIfNeeded(); await quiet(page);
+    const now = () => mc.evaluate((f) => f.querySelector('.hp-st[aria-pressed="true"]')?.dataset.id);
+    const dotMoving = () => mc.evaluate((f) => f.querySelector('.hp-mc-dot')?.getAnimations().length > 0);
+    const start = await now();
+    await mc.locator('.hp-mc-outs button').first().click();
+    if (!(await dotMoving())) fail('「次:」を押しても、点が遷移の線をたどらない');
+    if (await mc.evaluate((f) => [...f.querySelectorAll('.hp-mc-screen > [data-state]')].some((s) => s.getAnimations().length))) fail('状態を変えると、下の画面の中身が動く(ちらつく)');
+    await quiet(page);
+    if ((await now()) === start) fail('点がたどったあとに状態が変わらない');
+    // 直接の遷移がない状態を押したときは、ない遷移を見せない
+    const back = await mc.evaluate((f, id) => !f.querySelector(`.hp-edge[data-from="${f.querySelector('.hp-st[aria-pressed="true"]').dataset.id}"][data-to="${id}"]`), start);
+    if (back) { await mc.locator(`.hp-st[data-id="${start}"]`).click(); if (await dotMoving()) fail('直接の遷移がない状態を押しても、点が線をたどる'); await quiet(page); if ((await now()) !== start) fail('状態を押しても、その状態に移らない'); }
+    // キーボードで押したときは動かさない
+    await mc.locator('.hp-mc-outs button').first().focus(); await page.keyboard.press('Enter');
+    if (await dotMoving()) fail('キーボードで遷移を押すと点が動く');
+    await quiet(page);
+    // 判断の案に合わせて、条件付きの遷移(例の計画の「再送」)が出入りする
+    const retryOff = () => mc.evaluate((f) => f.querySelector('.hp-edge[data-from="failed"][data-to="sending"]')?.classList.contains('off'));
+    if (!(await retryOff())) fail('選ばれていない案の遷移(再送)が描かれている');
+    await page.evaluate(() => document.querySelector('input[name="retry"][value="3x5m"]').click()); await quiet(page);
+    if (await retryOff()) fail('案を選んでも、その案の遷移(再送)が出ない');
+    await page.evaluate(() => document.querySelector('input[name="retry"][value="none"]').click()); await quiet(page);
+    if (!(await retryOff())) fail('案を戻しても、遷移(再送)が消えない');
+    // 主な経路の再生: 押したときだけ一度たどって止まる。再生中に押すと止まる
+    const play = mc.locator('.hp-mc-play');
+    if (await play.count()) {
+      await play.click(); let saw = false;
+      for (let i = 0; i < 40 && (await play.textContent()) !== '主な経路を再生'; i++) { if (await dotMoving()) saw = true; await page.waitForTimeout(100); }
+      if (!saw) fail('「主な経路を再生」で点が動かない');
+      if ((await play.textContent()) !== '主な経路を再生') fail('「主な経路を再生」が終わっても止まらない');
+      await play.click(); await page.waitForTimeout(150); await play.click(); await quiet(page);
+      const stopped = await now(); await page.waitForTimeout(1200);
+      if ((await now()) !== stopped || await dotMoving()) fail('再生中に押しても止まらない');
+    } else fail('上の段が遷移でつながっているのに「主な経路を再生」が出ない');
+  }
+  // 呼び出しの木: 取り消し線が引かれ、子孫は深さの順に遅れて薄くなる
+  const parent = await page.evaluate(() => { const rows = [...document.querySelectorAll('.hp-row')]; const i = rows.findIndex((r, k) => r.dataset.mark && r.querySelector('.hp-strike') && rows[k + 1] && +rows[k + 1].style.getPropertyValue('--d') > +r.style.getPropertyValue('--d')); if (i < 0) return -1; rows[i].dataset.checkRow = '1'; rows[i].scrollIntoView({ block: 'center' }); return i; });
+  if (parent >= 0) {
+    const row = page.locator('.hp-row[data-check-row]'); await row.hover(); await row.locator('.hp-strike').click();
+    const st = await page.evaluate(() => ({ line: document.getAnimations().some((a) => a instanceof CSSTransition && a.effect.pseudoElement === '::after' && a.transitionProperty === 'transform'), delays: [...document.querySelectorAll('.hp-row.under-struck')].map((r) => ({ d: +r.style.getPropertyValue('--d'), ms: parseFloat(getComputedStyle(r).transitionDelay) * 1000 })).sort((a, b) => a.d - b.d) }));
+    if (!st.line) fail('取り消し線が引かれる動きがない');
+    // 深い行ほど遅れる(同じ深さは同じ遅れ)。DOM の並び順ではなく深さで比べる
+    const bad = !st.delays.length || st.delays[0].ms < 50 || st.delays.some((x, i) => i && (x.d === st.delays[i - 1].d ? x.ms !== st.delays[i - 1].ms : x.ms <= st.delays[i - 1].ms));
+    if (bad) fail(`取り消しの子孫が深さの順に薄くならない(${st.delays.map((x) => `深さ${x.d}:${x.ms}ms`).join(', ')})`);
+    await quiet(page); await row.locator('.hp-strike').click(); await quiet(page);
+  }
+  // mock の番号と注記: マウスを載せたときとキーボードで入ったときに連動する
+  const li = page.locator('.hp-plegend li').first();
+  if (await li.count()) {
+    const hl = () => li.evaluate((l) => l.closest('figure').querySelector('.hp-mpin').classList.contains('hl'));
+    await li.scrollIntoViewIfNeeded(); await li.hover();
+    if (!(await hl())) fail('注記の行にマウスを載せても、mock の番号が強調されない');
+    await page.mouse.move(2, 2); await li.locator('button').first().focus();
+    if (!(await hl())) fail('キーボードで注記の行に入っても、mock の番号が強調されない');
+  }
+  logs.forEach((m) => errors.push(`図: ${m}`));
+  await ctx.close();
+}
+
 }
 
 await browser.close();
@@ -421,4 +536,7 @@ writeFileSync(resolve(out, 'report.json'), JSON.stringify({ errors, warns }, nul
 warns.forEach((m) => console.log('  ⚠ ' + m));
 errors.forEach((m) => console.log('  ✗ ' + m));
 console.log(`${errors.length ? '✗' : '✓'} error ${errors.length} 件、warning ${warns.length} 件。screenshot と回答は ${out}`);
-process.exit(errors.length ? 1 : 0);
+// 引数なしのときは、部品カタログも見た目の検査にかける
+let catalogFailed = false;
+if (DEFAULT) { console.log('examples/parts.html'); try { execFileSync(process.execPath, [fileURLToPath(import.meta.url), packTo('../examples/parts.html', 'parts.packed.html'), ...(opt('--browser') ? ['--browser', opt('--browser')] : [])], { stdio: 'inherit' }); } catch { catalogFailed = true; } }
+process.exit(errors.length || catalogFailed ? 1 : 0);

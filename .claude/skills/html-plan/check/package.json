@@ -2,7 +2,7 @@
   "name": "html-plan-check",
   "private": true,
   "type": "module",
-  "description": "html-plan の計画ページを実ブラウザで描画し、アクセシビリティ・はみ出し・重なり・キーボード操作を検査する",
+  "description": "html-plan の runtime を変えたときに、実ブラウザで回帰を検査する開発用の依存",
   "dependencies": {
     "axe-core": "4.14.0",
     "playwright-core": "1.64.1"

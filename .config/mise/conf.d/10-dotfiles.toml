@@ -64,10 +64,8 @@ sheldon = { version = "0", os = "linux" }
 "~/.claude/skills/html-plan/runtime/plan.css" = { mode = "symlink" }
 "~/.claude/skills/html-plan/runtime/plan.js" = { mode = "symlink" }
 "~/.claude/skills/html-plan/runtime/pack.mjs" = { mode = "symlink" }
-"~/.claude/skills/html-plan/check/check.mjs" = { mode = "symlink" }
-"~/.claude/skills/html-plan/check/package.json" = { mode = "symlink" }
-"~/.claude/skills/html-plan/check/package-lock.json" = { mode = "symlink" }
 "~/.claude/skills/html-plan/examples/reminders.html" = { mode = "symlink" }
+"~/.claude/skills/html-plan/examples/parts.html" = { mode = "symlink" }
 "~/.claude/skills/reframe/SKILL.md" = { mode = "symlink" }
 "~/.claude/skills/clarify-ja/SKILL.md" = { mode = "symlink" }
 "~/.claude/skills/clarify-ja/slides.md" = { mode = "symlink" }
