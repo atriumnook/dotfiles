@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // check.mjs — html-plan の runtime を変えたときに、実ブラウザで回帰を検査する開発用の script。計画を書くときには要らない。
-//   node check.mjs [plan.packed.html] [--out <dir>] [--browser <chromium のパス>]
-// page を渡さなければ examples/reminders.html を pack して検査する。依存の導入と Chromium が要る。
+//   node check.mjs [plan.packed.html] [--full] [--out <dir>] [--browser <chromium のパス>]
+// page を渡さなければ、examples/reminders.html の全検査と examples/parts.html の見た目の検査をする。
+// page を渡すと見た目の検査だけをする(操作の検査は例の計画の判断や schema を前提にしている)。--full で操作も検査する。依存の導入と Chromium が要る。
 // 3 つの幅で、axe-core(WCAG 2.2 AA)、横のはみ出し、mock の幅超え、state 図のラベルの重なりを調べ、
 // 全体の screenshot を保存する。OS が dark でも light で描くことを確かめる。キーボードだけで
 // 判断・コメント・取り消し・編集・回答まで進められるか、回答のシートの手編集・merge・衝突・
@@ -18,11 +19,10 @@ const require = createRequire(import.meta.url);
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null; };
 let page0 = args.find((a, i) => !a.startsWith('--') && !['--out', '--browser'].includes(args[i - 1]));
-if (!page0) {
-  const here = dirname(fileURLToPath(import.meta.url));
-  page0 = resolve(mkdtempSync(resolve(tmpdir(), 'html-plan-check-')), 'reminders.packed.html');
-  execFileSync(process.execPath, [resolve(here, '../runtime/pack.mjs'), resolve(here, '../examples/reminders.html'), '-o', page0], { stdio: 'ignore' });
-}
+const here = dirname(fileURLToPath(import.meta.url));
+const DEFAULT = !page0, FULL = DEFAULT || args.includes('--full');
+const packTo = (src, name) => { const p = resolve(mkdtempSync(resolve(tmpdir(), 'html-plan-check-')), name); execFileSync(process.execPath, [resolve(here, '../runtime/pack.mjs'), resolve(here, src), '-o', p], { stdio: 'ignore' }); return p; };
+if (DEFAULT) page0 = packTo('../examples/reminders.html', 'reminders.packed.html');
 const url = pathToFileURL(resolve(page0)).href;
 const out = resolve(opt('--out') || resolve(page0, '..', basename(page0, '.html') + '.check'));
 mkdirSync(out, { recursive: true });
@@ -115,6 +115,7 @@ for (const width of [390, 768, 1280]) {
   await l.ctx.close(); await d.ctx.close();
 }
 
+if (FULL) {
 /* ── キーボードだけで最後まで進めるか ── */
 {
   const { ctx, page, logs } = await open({ width: 1280, height: 900 }, 'light');
@@ -521,9 +522,14 @@ for (const width of [390, 768, 1280]) {
   await ctx.close();
 }
 
+}
+
 await browser.close();
 writeFileSync(resolve(out, 'report.json'), JSON.stringify({ errors, warns }, null, 2));
 warns.forEach((m) => console.log('  ⚠ ' + m));
 errors.forEach((m) => console.log('  ✗ ' + m));
 console.log(`${errors.length ? '✗' : '✓'} error ${errors.length} 件、warning ${warns.length} 件。screenshot と回答は ${out}`);
-process.exit(errors.length ? 1 : 0);
+// 引数なしのときは、部品カタログも見た目の検査にかける
+let catalogFailed = false;
+if (DEFAULT) { console.log('examples/parts.html'); try { execFileSync(process.execPath, [fileURLToPath(import.meta.url), packTo('../examples/parts.html', 'parts.packed.html'), ...(opt('--browser') ? ['--browser', opt('--browser')] : [])], { stdio: 'inherit' }); } catch { catalogFailed = true; } }
+process.exit(errors.length || catalogFailed ? 1 : 0);

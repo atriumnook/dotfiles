@@ -290,6 +290,12 @@ test('pack: check/ と node_modules がなくても計画を pack できる', (t
   assert.match(readFileSync(out, 'utf8'), /<script data-html-plan>/);
 });
 
+test('pack: 部品カタログは error も warning もなく通る', () => {
+  const r = pack(resolve(skill, 'examples/parts.html'));
+  assert.equal(r.code, 0, r.out);
+  assert.doesNotMatch(r.out, /⚠/, r.out);
+});
+
 test('pack: src の行と呼び出しの前後を file から埋め込む', (t) => {
   const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

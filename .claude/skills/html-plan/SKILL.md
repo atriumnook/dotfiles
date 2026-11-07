@@ -15,6 +15,7 @@ HTML を1ファイル手で書く。中身は claim の木である。runtime �
   runtime/pack.mjs            ← lint と埋め込み。node だけで動く
   reference.md                ← 要素ごとの構文。書く前に読む
   examples/reminders.html     ← 完成した計画の例。形を写す
+  examples/parts.html         ← mock の部品カタログ。class を付けるだけで描ける部品の一覧
 ```
 
 ## claim の木
@@ -160,7 +161,7 @@ exhibit が計画の本体で、文章はそれに名前を付けるだけにす
 ```
 node --test test/          # parser・差分・回答の書式・lint。依存なし
 npm ci --prefix check      # 初回だけ
-node check/check.mjs       # 例の計画を pack し、3つの幅で a11y・はみ出し・キーボード操作・回答・動きを実ブラウザで検査する。Chromium が要る
+node check/check.mjs       # 例の計画の全検査(3つの幅の a11y・はみ出し・キーボード操作・回答・動き)と、部品カタログの見た目の検査。Chromium が要る
 ```
 
-特定の計画の mock のはみ出しを確かめたいときは、Chromium があれば `node check/check.mjs plan.packed.html` で検査できる。screenshot は `plan.packed.check/` に保存する。
+特定の計画の mock のはみ出しを確かめたいときは、Chromium があれば `node check/check.mjs plan.packed.html` で見た目を検査できる。操作の検査は例の計画を前提にしているので、渡した page には `--full` を付けたときだけかける。screenshot は `plan.packed.check/` に保存する。

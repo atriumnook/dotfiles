@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mock の部品カタログ</title>
+<link rel="stylesheet" href="../runtime/plan.css">
+<script src="../runtime/plan.js" defer></script>
+<body>
+<hp-plan>
+  <h1>mock の部品カタログ</h1>
+
+  <hp-claim>
+    <p>mock の部品は、template の HTML に class を付けるだけで描ける。</p>
+    <hp-mock w="480" caption="部品はすべて mock の CSS に入っている。計画ごとに CSS を書かなくてよい。">
+      <template>
+        <div class="ui col">
+          <div class="row"><span class="btn">取り消し</span><span class="btn pri">保存</span><span class="badge">期限 11/5</span><span class="grow"></span><span class="input">タスク名</span></div>
+          <div class="tabs"><span class="on">概要</span><span>通知</span><span>履歴</span></div>
+          <div class="card">
+            <div class="list-row"><i class="status done"></i><span class="grow">見積書を送る</span><span class="muted small">11/5</span></div>
+            <div class="list-row"><i class="status"></i><span class="grow">請求書を確認する</span><span class="muted small">11/6</span></div>
+          </div>
+          <div class="row"><label class="toggle"><input type="checkbox" checked> 通知を送る</label><span class="grow"></span><span class="toast">保存した</span></div>
+          <div class="row" style="align-items:flex-start">
+            <table class="table"><tr><th>時刻</th><th>状態</th></tr><tr><td>前日 18:00</td><td>送信済み</td></tr></table>
+            <div class="menu" style="flex:none;width:150px"><div>期限の時刻</div><div class="on">1時間前</div><div>日時を指定…</div></div>
+          </div>
+          <div class="card empty"><b>通知はまだない</b><span>「＋ 追加」で期限の前に通知できる</span></div>
+        </div>
+      </template>
+    </hp-mock>
+
+    <hp-claim>
+      <p>部品ごとの書き方は、次の HTML のとおりである。</p>
+      <hp-code language="html" title="部品の書き方" caption="余白は .ui、並びは .row と .col、伸びる隙間は .grow で作る。文字の色と大きさは .muted と .small。">
+<script type="text/plain">
+<span class="btn">取り消し</span> <span class="btn pri">保存</span>
+<span class="badge">期限 11/5</span>
+<span class="input">タスク名</span>
+<div class="tabs"><span class="on">概要</span><span>通知</span></div>
+<div class="card">…</div>
+<div class="list-row"><i class="status done"></i><span class="grow">見積書を送る</span><span class="muted small">11/5</span></div>
+<label class="toggle"><input type="checkbox" checked> 通知を送る</label>
+<span class="toast">保存した</span>
+<table class="table"><tr><th>時刻</th><th>状態</th></tr><tr><td>前日 18:00</td><td>送信済み</td></tr></table>
+<div class="menu"><div>期限の時刻</div><div class="on">1時間前</div></div>
+<div class="card empty"><b>通知はまだない</b><span>「＋ 追加」で期限の前に通知できる</span></div>
+</script>
+      </hp-code>
+    </hp-claim>
+  </hp-claim>
+
+  <hp-claim kind="scope">
+    <p>部品にしないもの</p>
+    <ul>
+      <li>対象の project にしかない画面。template に HTML を直接書く</li>
+      <li>terminal の出力。frame="terminal" の mock を使う</li>
+    </ul>
+  </hp-claim>
+</hp-plan>
+</body>
+</html>

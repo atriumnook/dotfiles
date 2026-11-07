@@ -45,7 +45,7 @@ claim の最初の子は claim を書いた `<p>`(中で `<code>` と `<b>` を�
 
 - `frame="none|browser|phone|terminal"`(既定は `none`)。`w` は設計する幅で、shadow root の中でその幅で描き、欄が狭ければ縮小する。`h` を付けると高さで切る。`url`(browser)と `title`(terminal)は枠の上の帯に出る。`caption` は下に出る。
 - **要点を示す最小の範囲を描く。** カード1枚、menu 1つ、行1つを、`w` 480 以下で描く。スマートフォンでも読める。画面全体は概観だけにし、そのときは `thumbnail` を付ける。
-- 中は普通の HTML。補助の class: `.ui`(余白)`.row` `.col` `.grow` `.muted` `.small` `.btn` `.btn.pri` `.card` `.input` `.menu`(子の `.on` が選択中)`.badge`。複数の mock で同じ CSS を使うときは、ページに `<style data-mock-shared>…</style>` を1つ置く。
+- 中は普通の HTML。補助の class: `.ui`(余白)`.row` `.col` `.grow` `.muted` `.small`。部品: `.btn` `.btn.pri` `.card` `.input` `.menu`(子の `.on` が選択中)`.badge` `.tabs`(子の `.on` が選択中)`.list-row` と `.status`(`.done` で完了)`.toggle` `.toast` `.table` `.empty`。描いた結果と書き方は `examples/parts.html` にある。複数の mock で同じ CSS を使うときは、ページに `<style data-mock-shared>…</style>` を1つ置く。
 - terminal の枠は暗い mono の面で、`.dim .g .r .y .b` と `<b>` を使える。
 - `data-ref="名前"` の要素に `<hp-pin ref="名前">` で番号を付ける。`anchor="tr|tl|br|bl|r|l|c"` で角を選ぶ(既定は `tr`)。要素がないときは `at="x%,y%"`。pin の `title` は要点の数語、本文は省いてよい。pin は mock の下に番号付きの一覧として出て、一覧の各行にコメントできる。一覧の行と mock の番号は、マウスを載せると互いに強調される。
 - 文字が出力の振る舞い(CLI、log、生成される file)は、terminal の mock か、出力の `hp-code` にする。

@@ -878,6 +878,13 @@ const MOCK_CSS = `:host{all:initial;display:block}*{box-sizing:border-box}
 .input{border:1px solid #d6d3cb;border-radius:8px;padding:6px 10px;background:#fff}.menu{border:1px solid #e6e3dc;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.12);padding:4px;background:#fff}
 .menu>*{padding:6px 10px;border-radius:6px}.menu .on{background:#f1eee7}.badge{display:inline-block;padding:1px 8px;border-radius:999px;background:#f1eee7;font-size:12px}
 hr{border:0;border-top:1px solid #ece9e2;margin:10px 0}
+.list-row{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid #ece9e2}.list-row:last-child{border-bottom:0}
+.status{flex:none;width:12px;height:12px;border-radius:50%;box-shadow:inset 0 0 0 1.5px #6b6962}.status.done{background:#1d1d1b;box-shadow:none}
+.tabs{display:flex;gap:16px;border-bottom:1px solid #e6e3dc}.tabs>*{padding:6px 0;color:#6b6962}.tabs>.on{color:#1d1d1b;font-weight:600;box-shadow:inset 0 -2px #1d1d1b}
+.toggle{display:inline-flex;align-items:center;gap:8px}.toggle input{appearance:none;position:relative;width:30px;height:18px;margin:0;border-radius:99px;background:#d6d3cb}.toggle input::after{content:"";position:absolute;left:2px;top:2px;width:14px;height:14px;border-radius:50%;background:#fff}.toggle input:checked{background:#1d1d1b}.toggle input:checked::after{left:14px}
+.toast{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;background:#1d1d1b;color:#fff;font-size:13px}
+.table{width:100%;border-collapse:collapse;font-size:13px}.table th,.table td{padding:6px 8px;border-bottom:1px solid #ece9e2;text-align:left}.table th{color:#6b6962;font-weight:500}
+.empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:20px 12px;color:#6b6962;text-align:center;font-size:13px}
 .term{background:#18181b;color:#e9e7e2;font:13px/1.55 "JetBrains Mono","IBM Plex Mono",ui-monospace,monospace;padding:12px 14px;white-space:pre-wrap}
 .term .dim{color:#8f8d87}.term .g{color:#86d993}.term .r{color:#ff958a}.term .y{color:#f2c86b}.term .b{color:#93bcff}.term b{color:#fff}`;
 function renderMock(el) {
