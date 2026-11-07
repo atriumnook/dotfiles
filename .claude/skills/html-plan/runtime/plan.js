@@ -1341,7 +1341,7 @@ function buildDialogs() {
   // 狭い画面: 回答のボタンがシートに広がる(clip-path と translate だけで描く)
   const pill = (to, r) => {
     const lx = Math.max(0, to.width - r.width - 20), ly = Math.max(0, to.height - r.height - 16);
-    return { clip: `inset(${ly}px ${to.width - lx - r.width}px ${to.height - ly - r.height}px ${lx}px round 0px)`, move: `${r.left - (to.left + lx)}px ${r.top - (to.top + ly)}px`, color: $('.hp-respond').classList.contains('accent') ? 'var(--accent)' : 'var(--ink)' };
+    return { clip: `inset(${ly}px ${to.width - lx - r.width}px ${to.height - ly - r.height}px ${lx}px round 6px)`, move: `${r.left - (to.left + lx)}px ${r.top - (to.top + ly)}px`, color: $('.hp-respond').classList.contains('accent') ? 'var(--accent)' : 'var(--ink)' };
   };
   const FULL = 'inset(0px 0px 0px 0px round 0px)';
   const morphIn = (trigger) => {
