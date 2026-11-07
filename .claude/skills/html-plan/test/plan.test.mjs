@@ -296,6 +296,21 @@ a -> c
   expected.forEach((re) => assert.match(r.out, re));
 });
 
+test('pack: 長さは半角を 0.5 字で数え、超えても縮めさせない', (t) => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const lint = (claim, small) => {
+    const f = resolve(dir, 'plan.html');
+    writeFileSync(f, page(`<hp-claim><p>${claim}</p><hp-ask id="q"><p>どちらか。</p><label><input type="radio" name="q" value="a" checked> A <small>${small}</small></label><label><input type="radio" name="q" value="b"> B</label></hp-ask></hp-claim>`));
+    return pack(f).out;
+  };
+  const narrow = lint(`${'a'.repeat(70)} を更新する。`, 'b'.repeat(50));
+  assert.doesNotMatch(narrow, /claim が|<small> が/, '半角 70 字 + 全角 6 字は 41.5 字、半角 50 字は 25 字');
+  const wide = lint(`${'あ'.repeat(45)}。`, 'あ'.repeat(31));
+  assert.match(wide, /claim が 46 字ある\(目安は 45 字\)。話が2つなら分ける。1つの内容なら、造語や略語で縮めず、そのままでよい/);
+  assert.match(wide, /<small> が 31 字ある\(目安は 30 字\)/);
+});
+
 test('pack: check/ と node_modules がなくても計画を pack できる', (t) => {
   const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

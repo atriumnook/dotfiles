@@ -31,6 +31,10 @@ const lineOf = (idx) => html.slice(0, idx).split('\n').length;
 const attrs = (s) => { const o = {}; String(s).replace(/([\w:.-]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g, (m, k, a, b, c) => { o[k.toLowerCase()] = a ?? b ?? c ?? ''; return ''; }); return o; };
 const stripTags = (t) => String(t).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 const scriptOf = (inner) => { const m = inner.match(/<script\s+type=["']?text\/plain["']?\s*>([\s\S]*?)<\/script>/i); return m ? m[1] : null; };
+// 長さは全角1字、半角0.5字で数える。英語のまま書く語や code の名前を不利にしない
+const widthOf = (s) => [...s].reduce((n, c) => n + (/[\x20-\x7e\uff61-\uff9f]/.test(c) ? 0.5 : 1), 0);
+// 長さは見直しの合図で、上限ではない
+const LONG = '話が2つなら分ける。1つの内容なら、造語や略語で縮めず、そのままでよい';
 const blocksOf = (tag) => [...html.matchAll(new RegExp(`<(${tag})\\b([^>]*)>([\\s\\S]*?)<\\/\\1>`, 'g'))].map((m) => ({ whole: m[0], a: attrs(m[2]), inner: m[3], idx: m.index, at: `${lineOf(m.index)} 行 <${tag}${attrs(m[2]).id ? '#' + attrs(m[2]).id : ''}>` }));
 
 /* ── 読み込む file の制限: --root かページのフォルダの中にあり(symlink は解決する)、秘密情報の file ではないこと ── */
@@ -64,7 +68,8 @@ const KNOWN = new Set(['hp-plan', 'hp-claim', 'hp-why', 'hp-quote', 'hp-code', '
 for (const m of html.matchAll(/<(hp-[a-z-]+)\b/g)) if (!KNOWN.has(m[1])) errors.push(`${lineOf(m.index)} 行: 未知の要素 <${m[1]}>。使える要素: ${[...KNOWN].join(' ')}`);
 const ids = {}; for (const m of html.matchAll(/\sid=["']([^"']+)["']/g)) { if (ids[m[1]]) errors.push(`id="${m[1]}" が重複している(${ids[m[1]]} 行と ${lineOf(m.index)} 行)`); ids[m[1]] = lineOf(m.index); }
 { const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i); const t = m ? stripTags(m[1]) : '';
-  if (t && (/[。.!?！？]$/.test(t) || t.length > 30)) warns.push(`<h1>「${t}」: 変更と場所を名詞句で、30字以内に書く(例「Tasklet のタスク期限リマインダー」)。文にしない`); }
+  if (/[。.!?！？]$/.test(t)) warns.push(`<h1>「${t}」: 変更と場所を名詞句で書く(例「Tasklet のタスク期限リマインダー」)。文にしない`);
+  if (widthOf(t) > 30) warns.push(`<h1>「${t}」: ${widthOf(t)} 字ある(目安は 30 字)。${LONG}`); }
 
 /* ── code ── */
 html = html.replace(/<(hp-code)\b([^>]*)>([\s\S]*?)<\/hp-code>/g, (whole, tag, rawAttrs, inner, idx) => {
@@ -148,7 +153,7 @@ const names = new Set();
 for (const b of blocksOf('hp-ask')) {
   if (!b.a.id) warns.push(`${b.at}: id を付ける。回答と保存の key になる`);
   const q = b.inner.match(/<p[^>]*>([\s\S]*?)<\/p>/i); if (!q) errors.push(`${b.at}: 最初の <p> に問いを書く`);
-  else if (stripTags(q[1]).length > 50) warns.push(`${b.at}: 問いが ${stripTags(q[1]).length} 字ある。50 字以内にし、補足は2つめの <p> に書く`);
+  else if (widthOf(stripTags(q[1])) > 50) warns.push(`${b.at}: 問いが ${widthOf(stripTags(q[1]))} 字ある(目安は 50 字)。補足は2つめの <p> に書ける。${LONG}`);
   const inputs = [...b.inner.matchAll(/<input\b([^>]*)>/gi)].map((m) => attrs(m[1]));
   if (!inputs.length) errors.push(`${b.at}: 選択肢がない。<label><input type="radio" name value> 案</label> で書く`);
   const groups = [...new Set(inputs.map((i) => i.name))];
@@ -159,7 +164,7 @@ for (const b of blocksOf('hp-ask')) {
     if (rs[0].type === 'radio' && !rs.some((r) => 'checked' in r)) errors.push(`${b.at}: "${g}" に checked がない。推奨案を checked にする`);
     if (names.has(g)) errors.push(`${b.at}: name "${g}" が別の判断でも使われている`); names.add(g);
   });
-  for (const s of b.inner.matchAll(/<small>([\s\S]*?)<\/small>/g)) if (stripTags(s[1]).length > 30) warns.push(`${b.at}: 選択肢の <small> が ${stripTags(s[1]).length} 字ある。30 字以内で違いだけを書く`);
+  for (const s of b.inner.matchAll(/<small>([\s\S]*?)<\/small>/g)) if (widthOf(stripTags(s[1])) > 30) warns.push(`${b.at}: 選択肢の <small> が ${widthOf(stripTags(s[1]))} 字ある(目安は 30 字)。案の違いだけを書く。${LONG}`);
 }
 
 /* ── claim の木 ── */
@@ -186,7 +191,7 @@ for (const b of blocksOf('hp-ask')) {
     if (n.claim == null && !n.a.at) errors.push(`${at}: 最初の子に、主張を1文で書いた <p> を置く(場所の claim なら at="path:line")`);
     if (n.claim && n.l <= 2 && !n.a.kind) {
       if (!/[。！？]$/.test(n.claim)) warns.push(`${at}:「${n.claim.slice(0, 30)}」は見出しになっている。真偽を判定できる1文にして「。」で終える`);
-      if (n.claim.length > 45) warns.push(`${at}: claim が ${n.claim.length} 字ある。45 字以内の1文にする`);
+      if (widthOf(n.claim) > 45) warns.push(`${at}: claim が ${widthOf(n.claim)} 字ある(目安は 45 字)。${LONG}`);
     }
     if (n.ex.length > 1) warns.push(`${at}: exhibit が ${n.ex.length} 個ある(${n.ex.join(', ')})。1つの claim に1つ。残りは子の claim にする`);
     if (!n.ex.length && !n.kids.length && n.a.kind !== 'scope') warns.push(`${at}: 主張を示す exhibit がない`);
@@ -222,8 +227,8 @@ for (const b of blocksOf('hp-ask')) {
   const hits = new Map();
   for (const t of texts) for (const [re, msg] of RULES) { const m = t.match(re); if (m) { if (!hits.has(msg)) hits.set(msg, []); hits.get(msg).push(m[0]); } }
   hits.forEach((v, msg) => warns.push(`文章: ${msg} — ${[...new Set(v)].slice(0, 5).map((x) => `「${x}」`).join(' ')}`));
-  const long = texts.flatMap((t) => t.split(/(?<=[。！？])/)).map((s) => s.trim()).filter((s) => s.length > 80);
-  if (long.length) warns.push(`文章: 80 字を超える文が ${long.length} 個ある。1文に1つの内容にする — 「${long[0].slice(0, 24)}…」`);
+  const long = texts.flatMap((t) => t.split(/(?<=[。！？])/)).map((s) => s.trim()).filter((s) => widthOf(s) > 80);
+  if (long.length) warns.push(`文章: 80 字を超える文が ${long.length} 個ある。${LONG} — 「${long[0].slice(0, 24)}…」`);
 }
 
 /* ── 埋め込み ── */
