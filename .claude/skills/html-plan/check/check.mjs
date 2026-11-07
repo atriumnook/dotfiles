@@ -329,8 +329,11 @@ for (const width of [390, 768, 1280]) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'light', reducedMotion: 'no-preference' });
   const page = await ctx.newPage(); const logs = [];
   page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
-  await page.goto(url); await page.waitForSelector('html[data-hp-ready]'); await quiet(page);
+  await page.goto(url); await page.waitForSelector('html[data-hp-ready]');
+  const intro = await page.evaluate(() => Math.round(Math.max(0, ...document.getAnimations().map((a) => a.effect.getComputedTiming().endTime))));
+  await quiet(page);
   const fail = (m) => errors.push(`動き: ${m}`);
+  if (intro > 300) fail(`ページを開いたときの動きが全体で ${intro}ms かかる(300ms 以内にする)`);
   const running = (p = page) => p.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && !(a instanceof CSSTransition)).length);
   await page.evaluate(() => window.HtmlPlan.collapseAll());
   const trace = (ms) => page.evaluate((limit) => new Promise((res) => { const el = document.querySelector('hp-claim')._body; const t0 = performance.now(); const hs = []; const f = () => { hs.push(el.getBoundingClientRect().height); if (performance.now() - t0 < limit) requestAnimationFrame(f); else res(hs); }; requestAnimationFrame(f); }), ms);
@@ -358,12 +361,26 @@ for (const width of [390, 768, 1280]) {
   // 案を押すと、枠が滑ってから次の判断が開き、左の計画がその claim へ動く
   await page.evaluate(() => window.HtmlPlan.expandAll());
   const before = await page.evaluate(() => document.querySelector('hp-plan').scrollTop);
+  // 答えて次へ進む間に、回答の tab 全体を動かさない(同じ tab を表示し直してぼやけていた)。答えた判断は回答済みの欄へ滑って移る
+  const during = page.evaluate(() => new Promise((res) => { const panel = document.getElementById('hp-panel-answer'); let panelMoved = false, slid = false, staggered = false, badgeMoved = false, openedAt = null; const t0 = performance.now();
+    const f = () => { if (panel.getAnimations().length) panelMoved = true; if (document.querySelectorAll('.hp-alist fieldset.hp-ask').length && [...document.querySelectorAll('fieldset.hp-ask')].some((fs) => fs.getAnimations().some((a) => a.effect.getKeyframes().some((k) => k.translate)))) slid = true;
+      if ([...document.querySelectorAll('fieldset.hp-ask > *')].some((k) => k.getAnimations().some((a) => a.effect.getTiming().delay > 0))) staggered = true;
+      if ([...document.querySelectorAll('.hp-badge')].some((b) => b.getAnimations().some((a) => a.effect.getKeyframes().some((k) => k.scale || k.filter || k.translate)))) badgeMoved = true;
+      if (openedAt == null && [...document.querySelectorAll('fieldset.hp-ask:not([data-compact])')].some((fs) => fs.querySelector('.hp-ask-no')?.textContent.startsWith('判断 2/'))) openedAt = Math.round(performance.now() - t0);
+      if (performance.now() - t0 < 1100) requestAnimationFrame(f); else res({ panelMoved, slid, staggered, badgeMoved, openedAt }); };
+    requestAnimationFrame(f); }));
   await page.click('fieldset.hp-ask:not([data-compact]) label.hp-opt:not(:has(input:checked))'); await page.waitForTimeout(380);
   const ind = await page.evaluate(() => { const f = document.querySelector('fieldset.hp-ask:not([data-compact])'), lb = f.querySelector('label.hp-opt:has(input:checked)'), i = f.querySelector('.hp-opt-ind'), a = i.getBoundingClientRect(), b = lb.getBoundingClientRect(); const top = document.elementFromPoint(b.left + b.width / 2, b.top + 10); return { dy: Math.abs(a.top - b.top), dh: Math.abs(a.height - b.height), label: !!top?.closest('label.hp-opt') }; });
   if (ind.dy > 1 || ind.dh > 1) fail('選択の枠が選んだ案に重ならない');
   if (!ind.label) fail('選択の枠が案の上に被さっている');
   // 畳む前の timer とスクロールは animation に出ないので、次の判断の claim が画面に入るのを待つ
   await page.waitForFunction(() => { const second = document.querySelectorAll('fieldset.hp-ask')[1], r = document.querySelector('.hp-ask-anchor[data-now]')?.getBoundingClientRect(), p = document.querySelector('hp-plan').getBoundingClientRect(); return second && !second.hasAttribute('data-compact') && r && r.top >= p.top && r.bottom <= p.bottom; }, null, { timeout: 3000 }).catch(() => {}); await quiet(page);
+  const moves = await during;
+  if (moves.panelMoved) fail('次の判断へ進むときに、回答の tab 全体が動く(ぼやける)');
+  if (!moves.slid) fail('答えた判断が、回答済みの欄へ滑らずに一瞬で移る');
+  if (moves.staggered) fail('判断を開くときに、中身をずらして出している(答えるたびに起きる動きなので、ずらさない)');
+  if (moves.badgeMoved) fail('claim の見出しの札が、数が変わるたびに動く');
+  if (moves.openedAt == null || moves.openedAt > 400) fail(`案を選んでから次の判断が開くまで ${moves.openedAt ?? '1100 以上'}ms かかる`);
   const flow = await page.evaluate(() => { const fs = [...document.querySelectorAll('fieldset.hp-ask')]; const open = fs.filter((f) => !f.hasAttribute('data-compact')); const anchors = document.querySelectorAll('.hp-ask-anchor[data-now]'); const r = anchors[0]?.getBoundingClientRect(); const p = document.querySelector('hp-plan').getBoundingClientRect(); return { open: open.length, second: !!open[0]?.querySelector('.hp-ask-no')?.textContent.startsWith('判断 2/'), now: anchors.length, inView: r && r.top >= p.top && r.bottom <= p.bottom, top: document.querySelector('hp-plan').scrollTop }; });
   if (flow.open !== 1 || !flow.second) fail('案を押しても次の判断が開かない');
   if (flow.now !== 1 || !flow.inView) fail('開いた判断の claim が計画の画面内に来ない');
@@ -372,7 +389,9 @@ for (const width of [390, 768, 1280]) {
   await page.click('.hp-revise'); await page.waitForTimeout(250);
   if (await page.evaluate(() => document.querySelectorAll('fieldset.hp-ask:not([data-compact])').length) !== 1) fail('回答のボタンで判断が畳まれた');
   // タブの枠は選んだタブに重なる
-  await quiet(page); await page.click('.hp-tab[data-tab="body"]'); await quiet(page);
+  await quiet(page); await page.click('.hp-tab[data-tab="body"]');
+  if (await page.evaluate(() => document.getElementById('hp-panel-body').getAnimations().length)) fail('tab を切り替えると中身が動く');
+  await quiet(page);
   const th = await page.evaluate(() => { const a = document.querySelector('.hp-tab-thumb').getBoundingClientRect(), b = document.querySelector('.hp-tab[aria-selected="true"]').getBoundingClientRect(); return Math.abs(a.left - b.left) + Math.abs(a.width - b.width); });
   if (th > 2) fail('タブの枠が選んだタブに重ならない');
   // 畳み始めた判断を 110ms 以内に開き直しても、あとから畳まれない
@@ -409,6 +428,8 @@ for (const width of [390, 768, 1280]) {
   const np = await nc.newPage(); await np.goto(url); await np.waitForSelector('html[data-hp-ready]'); await quiet(np);
   await np.click('.hp-respond');
   if (!(await running(np))) fail('マウスで開いたシートが動かない');
+  const sheetEnd = await np.evaluate(() => Math.round(Math.max(0, ...document.getAnimations().filter((a) => !(a instanceof CSSTransition)).map((a) => a.effect.getComputedTiming().endTime))));
+  if (sheetEnd > 300) fail(`狭い画面のシートが開ききるまで ${sheetEnd}ms かかる(300ms 以内にする)`);
   await np.waitForTimeout(110);
   if (await np.evaluate(() => { const c = document.querySelector('.hp-cmp-cover'); return c && +getComputedStyle(c).opacity > 0.05; })) fail('シートが広がる途中で色の覆いが残る');
   await quiet(np);
@@ -427,9 +448,14 @@ for (const width of [390, 768, 1280]) {
   await r.page.click('hp-claim .hp-toggle');
   const moved = await r.page.evaluate(() => document.getAnimations().flatMap((a) => a.effect?.getKeyframes?.() || []).some((k) => k.translate || k.height || k.filter));
   if (moved) errors.push('動き: reduced motion で位置や高さが動く');
+  // 最初の claim は開いているので、閉じてからもう一度押して開く
+  await r.page.click('hp-claim .hp-toggle');
+  if (await r.page.evaluate(() => document.getAnimations().flatMap((a) => a.effect?.getKeyframes?.() || []).some((k) => k.translate || k.height || k.filter))) errors.push('動き: reduced motion で claim を開くと位置や高さが動く');
+  if (!(await r.page.evaluate(() => document.getAnimations().some((a) => a.effect?.getKeyframes?.().some((k) => k.opacity != null))))) errors.push('動き: reduced motion で claim を開いても何も変わらない(透明度の変化まで止めている)');
   await r.page.click('.hp-respond');
   const moved2 = await r.page.evaluate(() => document.getAnimations().flatMap((a) => a.effect?.getKeyframes?.() || []).some((k) => k.translate || k.clipPath));
   if (moved2) errors.push('動き: reduced motion でシートが動く');
+  if (!(await r.page.evaluate(() => document.getAnimations().some((a) => a.effect?.getKeyframes?.().some((k) => k.opacity != null))))) errors.push('動き: reduced motion でシートを開いても何も変わらない');
   await r.ctx.close();
 }
 

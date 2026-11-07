@@ -367,6 +367,9 @@ const EXIT = { duration: 160, easing: OUT };
 let modality = 'pointer';
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const live = () => modality === 'pointer' && !calm();
+// reduced motion でも、マウスの操作には透明度の変化だけを返す。何も変わらないと、操作が届いたかが分からない
+const softly = () => modality === 'pointer' && calm();
+const FADE = [{ opacity: 0 }, { opacity: 1 }], SOFT = { duration: 150, easing: OUT };
 const markInput = (m) => { modality = m; document.documentElement.dataset.input = m; };
 addEventListener('pointerdown', () => markInput('pointer'), true);
 addEventListener('keydown', () => markInput('keyboard'), true);
@@ -397,7 +400,7 @@ const BOX = ['height', 'marginTop', 'marginBottom', 'paddingTop', 'paddingBottom
 const boxOf = (el) => { const cs = getComputedStyle(el); return Object.fromEntries(BOX.map((p) => [p, cs[p]])); };
 const zeroBox = Object.fromEntries(BOX.map((p) => [p, '0px']));
 function enter(el) {
-  if (!live()) return;
+  if (!live()) { if (softly()) el.animate(FADE, SOFT); return; }
   const box = boxOf(el);
   el.style.overflow = 'clip';
   el.animate([zeroBox, box], SP.layout).onfinish = () => { el.style.overflow = ''; };
@@ -415,7 +418,7 @@ function collapse(el, done) {
 const leave = (el) => collapse(el, () => el.remove());
 function roll(el, text, dir = 1) {
   const old = el._v; if (old === String(text)) return; el._v = String(text);
-  if (!live() || old == null) { el.textContent = text; return; }
+  if (!live() || old == null) { el.textContent = text; if (old != null && softly()) el.animate(FADE, SOFT); return; }
   const inn = h('span', null, String(text)), out = h('span', { 'aria-hidden': 'true' }, old);
   el.replaceChildren(inn, out);
   inn.animate([{ opacity: 0, translate: `0 ${90 * dir}%`, filter: 'blur(3px)' }, { opacity: 1, translate: '0 0', filter: 'blur(0)' }], SP.swap);
@@ -449,7 +452,7 @@ function foldAsk(a, compact) {
     if (folding) { const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = ''; if (live()) tweenHeight(fs, from, rectH(fs)); }
     return;
   }
-  if (!live()) { tweens.get(fs)?.cancel(); fs.style.overflow = ''; fs.toggleAttribute('data-compact', compact); if (compact) sortAsks(); return; }
+  if (!live()) { tweens.get(fs)?.cancel(); fs.style.overflow = ''; fs.toggleAttribute('data-compact', compact); if (compact) sortAsks(); else if (softly()) [...fs.children].forEach((k) => { if (k !== a.sumBtn) k.animate(FADE, SOFT); }); return; }
   const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = '';
   fs.toggleAttribute('data-compact', compact); const to = rectH(fs);
   const kids = [...fs.children].filter((k) => k !== a.sumBtn);
@@ -466,7 +469,7 @@ function foldAsk(a, compact) {
     }, 110);
   } else {
     tweenHeight(fs, from, to);
-    kids.forEach((k, i) => k.animate(blurIn(6), { ...SP.swap, delay: i * 30, fill: 'backwards' }));
+    kids.forEach((k) => k.animate(FADE, { ...SP.swap, fill: 'backwards' }));
   }
 }
 
@@ -561,7 +564,7 @@ function renderClaim(c, idx) {
   [...c.childNodes].forEach((n) => { if (n !== p) body.append(n); });
   c.replaceChildren(head, body);
   c.dataset.level = c._level; if (c.getAttribute('kind')) c.dataset.kind = c.getAttribute('kind');
-  toggle.addEventListener('click', (e) => setOpen(c, toggle.getAttribute('aria-expanded') !== 'true', live() && e.detail > 0));
+  toggle.addEventListener('click', (e) => setOpen(c, toggle.getAttribute('aria-expanded') !== 'true', e.detail > 0 && (live() || (softly() && 'fade'))));
   c._toggle = toggle; c._body = body; c._head = head;
   registerTarget(key, { where: c._no, quote: text.textContent.trim(), anchor: toggle, place: (card) => head.after(card) });
 }
@@ -571,7 +574,7 @@ function setOpen(c, open, animated = false) {
   if (!c._body) return;
   const b = c._body;
   c._toggle.setAttribute('aria-expanded', String(open)); c.classList.toggle('open', open);
-  if (!animated) { tweens.get(b)?.cancel(); fades.get(b)?.cancel(); b.style.overflow = ''; b.hidden = !open; return; }
+  if (!animated || animated === 'fade') { tweens.get(b)?.cancel(); fades.get(b)?.cancel(); b.style.overflow = ''; b.hidden = !open; if (animated && open) b.animate(FADE, SOFT); return; }
   const closed = b.hidden, from = closed ? 0 : rectH(b), op = closed ? '0' : getComputedStyle(b).opacity;
   // 動いている途中で逆向きにしたときは ease-in-out で静止から動かす。ease-out だと最速で逆へ動き出して跳ぶ
   const turn = tweens.has(b) ? { easing: IN_OUT } : {};
@@ -826,7 +829,7 @@ function renderMachine(el) {
     const outs = m.edges.filter((e) => e.from === id && e.mark !== '-');
     fill(panelHead, h('code', null, id), st.final ? h('span', { class: 'hp-tag' }, '終了') : null, st.desc ? h('span', null, st.desc) : null,
       outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => { setState(e.to); stateEls[e.to].focus(); } }, `${e.label || e.to} → ${e.to}`))) : null);
-    screens.forEach((s) => { const show = s.dataset.state.split(/[\s,]+/).includes(id), was = !s.hidden; s.hidden = !show; if (show && !was && live()) s.animate(blurIn(6), SP.swap); });
+    screens.forEach((s) => { const show = s.dataset.state.split(/[\s,]+/).includes(id), was = !s.hidden; s.hidden = !show; if (show && !was && live()) s.animate(blurIn(6), SP.swap); else if (show && !was && softly()) s.animate(FADE, SOFT); });
   }
   setState(m.initial);
 }
@@ -974,7 +977,7 @@ function renderAsk(el, idx, total, claimSrc) {
     if (!e.target.matches('input') || modality !== 'pointer') return;
     const was = a.state();
     S.answers[id] = values(); S.confirmed[id] = true; save(); place(!live()); refresh();
-    if (was === 'pending' && e.target.type === 'radio') { clearTimeout(a.adv); a.adv = setTimeout(() => nextAsk(a), 420); }
+    if (was === 'pending' && e.target.type === 'radio') { clearTimeout(a.adv); a.adv = setTimeout(() => nextAsk(a), 260); }   // 選択の枠の移動(200ms)を見せてから進む
   });
   note.addEventListener('focus', () => clearTimeout(a.adv));
   asks.push(a);
@@ -1024,13 +1027,24 @@ const secPend = h('section', { class: 'hp-asec', 'aria-label': '未回答の判�
 const secDone = h('section', { class: 'hp-asec', 'aria-label': '回答済みの判断' }, h('h3', { class: 'hp-asec-h' }, '回答済み', countDone), listDone);
 function sortAsks() {
   const focused = document.activeElement;
+  const heads = [secPend, secDone].map((s) => s.firstElementChild), wasHidden = secDone.hidden;
+  const items = [...asks.map((a) => a.fs), ...heads], before = live() ? new Map(items.map((el) => [el, el.getBoundingClientRect()])) : null;
+  const movedAsks = new Set();
   [[listPend, (a) => a.state() === 'pending'], [listDone, (a) => a.state() !== 'pending']].forEach(([list, want]) => {
-    asks.forEach((a) => { if (!want(a) || a.fs.parentElement === list) return; if (a.fs.parentElement && !a.fs.hasAttribute('data-compact') && a.fs._foldT == null) return; const next = asks.slice(asks.indexOf(a) + 1).find((x) => x.fs.parentElement === list); list.insertBefore(a.fs, next?.fs || null); });
+    asks.forEach((a) => { if (!want(a) || a.fs.parentElement === list) return; if (a.fs.parentElement && !a.fs.hasAttribute('data-compact') && a.fs._foldT == null) return; const next = asks.slice(asks.indexOf(a) + 1).find((x) => x.fs.parentElement === list); if (a.fs.parentElement) movedAsks.add(a.fs); list.insertBefore(a.fs, next?.fs || null); });
   });
   if (focused && focused !== document.activeElement && document.contains(focused)) focused.focus({ preventScroll: true });   // 移した判断の中にあったフォーカスを戻す
   const p = asks.filter((a) => a.state() === 'pending').length;
   countPend.textContent = p; countDone.textContent = asks.length - p;
   secPend.hidden = !p; secDone.hidden = p === asks.length;
+  if (!before || !movedAsks.size) return;
+  items.forEach((el) => {
+    const b = before.get(el), a = el.getBoundingClientRect(); if (!b.height || !a.height) return;
+    const dy = b.top - a.top; if (Math.abs(dy) < 1) return;
+    if (movedAsks.has(el)) { el.style.position = 'relative'; el.style.zIndex = '1'; }   // 移る判断はほかの行の上を通す
+    el.animate([{ translate: `0 ${dy}px` }, { translate: '0 0' }], SP.move).onfinish = () => { el.style.position = ''; el.style.zIndex = ''; };
+  });
+  if (wasHidden && !secDone.hidden) heads[1].animate([{ opacity: 0 }, { opacity: 1 }], SP.swap);
 }
 
 /* ── 状態の表示 ── */
@@ -1062,7 +1076,7 @@ function refresh() {
       pend ? h('span', { class: 'hp-badge pending' }, `未回答 ${pend}`) : null,
       changed ? h('span', { class: 'hp-badge changed' }, `変更 ${changed}`) : null,
       com ? h('span', { class: 'hp-badge' }, `コメント ${com}`) : null);
-    if (!first && live()) [...badges.children].forEach((x) => x.animate([{ opacity: 0, scale: 0.8, filter: 'blur(4px)' }, { opacity: 1, scale: 1, filter: 'blur(0)' }], SP.swap));
+    if (!first && live()) [...badges.children].forEach((x) => x.animate(FADE, SP.swap));
   });
   tocMarks.forEach(([c, m]) => { const own = asks.filter((a) => c.contains(a.el)); const done = own.filter((a) => a.state() !== 'pending').length; const st = !own.length ? 'none' : !done ? 'pending' : done < own.length ? 'partial' : 'confirmed'; m.dataset.state = st; if (st === 'none') { m.removeAttribute('role'); m.removeAttribute('aria-label'); m.setAttribute('aria-hidden', 'true'); } else { m.removeAttribute('aria-hidden'); m.setAttribute('role', 'img'); m.setAttribute('aria-label', st === 'pending' ? '判断は未回答' : st === 'partial' ? '判断の一部に回答済み' : '判断はすべて回答済み'); } });
   sortAsks();
@@ -1169,7 +1183,6 @@ function buildDialogs() {
     tabA.setAttribute('aria-selected', String(!body)); tabB.setAttribute('aria-selected', String(body));
     tabA.tabIndex = body ? -1 : 0; tabB.tabIndex = body ? 0 : -1;
     placeThumb();
-    if (live()) (body ? panelB : panelA).animate(blurIn(6, 3), SP.swap);
   };
   tabA.onclick = () => showTab('answer'); tabB.onclick = () => showTab('body');
   [tabA, tabB].forEach((t) => t.addEventListener('keydown', (e) => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); const nx = t === tabA ? tabB : tabA; nx.click(); nx.focus(); }));
@@ -1262,7 +1275,7 @@ function buildDialogs() {
     const cover = h('div', { class: 'hp-cmp-cover', 'aria-hidden': 'true', style: `background:${a.color}` }); dlg.append(cover);
     dlg.animate([{ clipPath: a.clip, translate: a.move }, { clipPath: FULL, translate: '0 0' }], SP.panel);
     cover.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 70, easing: OUT }).onfinish = () => cover.remove();   // 広がる途中で色の塊に見えないよう、先に消す
-    kids.forEach((k, i) => k.animate(blurIn(10), { ...SP.swap, delay: 40 + i * 30, fill: 'backwards' }));
+    kids.forEach((k, i) => k.animate(blurIn(10), { ...SP.swap, delay: Math.min(i, 4) * 20, fill: 'backwards' }));   // 全体で 300ms 未満
   };
   const closePanel = () => {
     if (!dlg.matches(':modal') || dlg._closing) return;
@@ -1315,7 +1328,7 @@ function buildDialogs() {
       const animate = !instant && live();
       const trigger = animate ? $('.hp-respond').getBoundingClientRect() : null;   // 開くとバーが消えるので、先に測る
       dlg.showModal(); placeThumb();
-      if (animate) morphIn(trigger);
+      if (animate) morphIn(trigger); else if (!instant && softly()) dlg.animate(FADE, SOFT);
     }
     if (!keepFocus) { showTab('answer'); overall.focus({ preventScroll: true }); }
     await checkSend();
@@ -1408,10 +1421,10 @@ function boot() {
   connectClaude().then(() => HP.checkSend());
   if (location.hash) { const t = document.getElementById(location.hash.slice(1)); if (t) setTimeout(() => go(t), 50); }
   if (!calm()) {
-    [$('h1', plan), $('.hp-meta', plan), $('details.hp-why', plan), $('.hp-toc', plan), ...$$(':scope > hp-claim', plan)].filter(Boolean).slice(0, 7).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 8px' }, { opacity: 1, translate: '0 0' }], { duration: 300, easing: OUT, delay: i * 40, fill: 'backwards' }));
+    [$('h1', plan), $('.hp-meta', plan), $('details.hp-why', plan), $('.hp-toc', plan), ...$$(':scope > hp-claim', plan)].filter(Boolean).slice(0, 4).forEach((k, i) => k.animate([{ opacity: 0, translate: '0 8px' }, { opacity: 1, translate: '0 0' }], { ...SP.swap, delay: i * 30, fill: 'backwards' }));   // 4 つまで 30ms ずつ。全体で 300ms 未満
     const rail = $('.hp-composer');
-    if (rail?.open) rail.animate([{ opacity: 0, translate: '14px 0' }, { opacity: 1, translate: '0 0' }], { ...SP.panel, delay: 120, fill: 'backwards' });
-    else $('.hp-bar')?.animate(blurIn(16, 4), { ...SP.panel, delay: 260, fill: 'backwards' });
+    if (rail?.open) rail.animate([{ opacity: 0, translate: '14px 0' }, { opacity: 1, translate: '0 0' }], { ...SP.swap, delay: 60, fill: 'backwards' });
+    else $('.hp-bar')?.animate(blurIn(16, 4), { ...SP.swap, delay: 60, fill: 'backwards' });
   }
   document.documentElement.dataset.hpReady = '1';
 }
