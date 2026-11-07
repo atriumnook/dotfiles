@@ -1,21 +1,28 @@
 #!/usr/bin/env node
-// check.mjs — pack した計画ページを実ブラウザで開き、目で見る前に機械で分かる問題を検査する。
-//   node check.mjs plan.packed.html [--out <dir>] [--browser <chromium のパス>]
+// check.mjs — html-plan の runtime を変えたときに、実ブラウザで回帰を検査する開発用の script。計画を書くときには要らない。
+//   node check.mjs [plan.packed.html] [--out <dir>] [--browser <chromium のパス>]
+// page を渡さなければ examples/reminders.html を pack して検査する。依存の導入と Chromium が要る。
 // 3 つの幅で、axe-core(WCAG 2.2 AA)、横のはみ出し、mock の幅超え、state 図のラベルの重なりを調べ、
 // 全体の screenshot を保存する。OS が dark でも light で描くことを確かめる。キーボードだけで
 // 判断・コメント・取り消し・編集・回答まで進められるか、回答のシートの手編集・merge・衝突・
 // 次の動き・送信が働くか、動きが瞬間移動せずキーボードと reduced motion で止まるかを確かめる。問題があれば exit 1。
 import { chromium } from 'playwright-core';
 import { createRequire } from 'node:module';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { resolve, basename } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve, basename, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const args = process.argv.slice(2);
 const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : null; };
-const page0 = args.find((a, i) => !a.startsWith('--') && !['--out', '--browser'].includes(args[i - 1]));
-if (!page0) { console.error('usage: node check.mjs plan.packed.html [--out <dir>] [--browser <path>]'); process.exit(2); }
+let page0 = args.find((a, i) => !a.startsWith('--') && !['--out', '--browser'].includes(args[i - 1]));
+if (!page0) {
+  const here = dirname(fileURLToPath(import.meta.url));
+  page0 = resolve(mkdtempSync(resolve(tmpdir(), 'html-plan-check-')), 'reminders.packed.html');
+  execFileSync(process.execPath, [resolve(here, '../runtime/pack.mjs'), resolve(here, '../examples/reminders.html'), '-o', page0], { stdio: 'ignore' });
+}
 const url = pathToFileURL(resolve(page0)).href;
 const out = resolve(opt('--out') || resolve(page0, '..', basename(page0, '.html') + '.check'));
 mkdirSync(out, { recursive: true });

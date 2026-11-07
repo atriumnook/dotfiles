@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { cpSync, mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -294,6 +294,15 @@ a -> c
     /敬体/,
   ];
   expected.forEach((re) => assert.match(r.out, re));
+});
+
+test('pack: check/ と node_modules がなくても計画を pack できる', (t) => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'html-plan-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  for (const d of ['runtime', 'examples']) cpSync(resolve(skill, d), resolve(dir, d), { recursive: true });
+  const out = resolve(dir, 'plan.packed.html');
+  execFileSync(process.execPath, [resolve(dir, 'runtime/pack.mjs'), resolve(dir, 'examples/reminders.html'), '-o', out], { encoding: 'utf8' });
+  assert.match(readFileSync(out, 'utf8'), /<script data-html-plan>/);
 });
 
 test('pack: src の行と呼び出しの前後を file から埋め込む', (t) => {
