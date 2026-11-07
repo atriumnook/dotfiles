@@ -466,17 +466,6 @@ if (FULL) {
     await mc.locator('.hp-mc-outs button').first().focus(); await page.keyboard.press('Enter');
     if (await dotMoving()) fail('キーボードで遷移を押すと点が動く');
     await quiet(page);
-    // 主な経路の再生: 押したときだけ一度たどって止まる。再生中に押すと止まる
-    const play = mc.locator('.hp-mc-play');
-    if (await play.count()) {
-      await play.click(); let saw = false;
-      for (let i = 0; i < 40 && (await play.textContent()) !== '主な経路を再生'; i++) { if (await dotMoving()) saw = true; await page.waitForTimeout(100); }
-      if (!saw) fail('「主な経路を再生」で点が動かない');
-      if ((await play.textContent()) !== '主な経路を再生') fail('「主な経路を再生」が終わっても止まらない');
-      await play.click(); await page.waitForTimeout(150); await play.click(); await quiet(page);
-      const stopped = await now(); await page.waitForTimeout(1200);
-      if ((await now()) !== stopped || await dotMoving()) fail('再生中に押しても止まらない');
-    } else fail('上の段が遷移でつながっているのに「主な経路を再生」が出ない');
   }
   // 呼び出しの木: 取り消し線が引かれ、子孫は深さの順に遅れて薄くなる
   const parent = await page.evaluate(() => { const rows = [...document.querySelectorAll('.hp-row')]; const i = rows.findIndex((r, k) => r.dataset.mark && r.querySelector('.hp-strike') && rows[k + 1] && +rows[k + 1].style.getPropertyValue('--d') > +r.style.getPropertyValue('--d')); if (i < 0) return -1; rows[i].dataset.checkRow = '1'; rows[i].scrollIntoView({ block: 'center' }); return i; });

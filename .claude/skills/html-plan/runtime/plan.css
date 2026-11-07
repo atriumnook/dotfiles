@@ -408,9 +408,8 @@ textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .hp-ask-foot { justify-content: flex-end; }
 
 /* ── 図の動き ── */
-/* 状態図: 遷移をたどる点と、主な経路の再生 */
+/* 状態図: 遷移をたどる点 */
 .hp-mc-dot { fill: var(--accent); pointer-events: none; }
-.hp-mc-tools { display: flex; justify-content: flex-end; padding: 0 14px 8px; }
 /* 呼び出しの木: 取り消し線は文字の高さの中心に引く(行の高さの半分は、文字の領域の中心と一致する) */
 .hp-row.struck .hp-nm { text-decoration: none; }
 .hp-row .hp-nm { position: relative; }

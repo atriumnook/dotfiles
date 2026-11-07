@@ -815,19 +815,7 @@ function renderMachine(el) {
   const panelHead = h('div', { class: 'hp-mc-now' }); const screenBox = h('div', { class: 'hp-mc-screen' });
   screens.forEach((s) => screenBox.append(s));
   const panel = h('div', { class: 'hp-mc-panel', 'aria-live': 'polite' }, panelHead, screenBox);
-  // 上の段の状態が遷移でつながっていれば、押したときだけ一度たどる。自動では動かさない(読む邪魔になり、見ている状態が勝手に変わる)
-  const top = (m.grid[0] || []).filter((id) => id && id !== '.' && m.states[id]);
-  const route = top.slice(1).map((id, i) => m.edges.find((e) => e.from === top[i] && e.to === id && e.mark !== '-'));
-  let run = 0;
-  const play = top.length > 1 && route.every(Boolean) ? h('button', { type: 'button', class: 'hp-btn small hp-mc-play' }, '主な経路を再生') : null;
-  function stop() { run++; if (play) { delete play.dataset.on; play.textContent = '主な経路を再生'; } }
-  if (play) play.onclick = async () => {
-    if (play.dataset.on) { stop(); trip?.finish(); return; }
-    const me = ++run; play.dataset.on = '1'; play.textContent = '止める'; trip?.finish(); setState(top[0]);
-    for (const e of route) { await new Promise((r) => setTimeout(r, 400)); if (run !== me) return; await travel(e); if (run !== me) return; }
-    stop();
-  };
-  fig.append(scroller, ...(play ? [h('div', { class: 'hp-mc-tools' }, play)] : []), panel);
+  fig.append(scroller, panel);
   // 実際にある遷移をたどったときだけ、点を線の上で進める。ない遷移を見せない。曲線は ease-in-out の値をそのまま使う
   let cur = null, trip = null;
   function travel(e) {
@@ -844,7 +832,7 @@ function renderMachine(el) {
     });
   }
   // 状態を押したとき: 今の状態からの直接の遷移が1本だけならたどる。それ以外は線をたどらずに切り替える
-  function pick(id) { stop(); trip?.finish(); if (id === cur) return; const es = m.edges.filter((e) => e.from === cur && e.to === id && e.mark !== '-'); if (es.length === 1) travel(es[0]); else setState(id); }
+  function pick(id) { trip?.finish(); if (id === cur) return; const es = m.edges.filter((e) => e.from === cur && e.to === id && e.mark !== '-'); if (es.length === 1) travel(es[0]); else setState(id); }
   const legend = [];
   if (m.edges.some((e) => e.mark === '+')) legend.push(h('span', { class: 'hp-leg add' }, '破線(緑)は提案で増える遷移'));
   if (m.edges.some((e) => e.mark === '-')) legend.push(h('span', { class: 'hp-leg del' }, '破線(赤)はなくなる遷移'));
@@ -857,7 +845,7 @@ function renderMachine(el) {
     $$('.hp-edge, .hp-elabel', svg).forEach((g) => g.classList.toggle('out', g.dataset.from === id));
     const outs = m.edges.filter((e) => e.from === id && e.mark !== '-');
     fill(panelHead, h('code', null, id), st.final ? h('span', { class: 'hp-tag' }, '終了') : null, st.desc ? h('span', null, st.desc) : null,
-      outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => { stop(); travel(e).then(() => stateEls[e.to].focus({ preventScroll: true })); } }, `${e.label || e.to} → ${e.to}`))) : null);
+      outs.length ? h('span', { class: 'hp-mc-outs' }, '次: ', ...outs.map((e) => h('button', { type: 'button', class: 'hp-btn small', onclick: () => travel(e).then(() => stateEls[e.to].focus({ preventScroll: true })) }, `${e.label || e.to} → ${e.to}`))) : null);
     // 画面の中身は一瞬で入れ替え、欄の高さだけを滑らかに変える。中身を透明から出すと、入れ替わる間に一瞬なにも映らずちらつく
     const swap = () => screens.forEach((s) => { s.hidden = !s.dataset.state.split(/[\s,]+/).includes(id); });
     if (first) swap(); else reflow(screenBox, swap);
