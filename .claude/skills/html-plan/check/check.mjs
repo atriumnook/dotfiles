@@ -123,9 +123,12 @@ for (const width of [390, 768, 1280]) {
   const active = () => page.evaluate(() => { const a = document.activeElement; return { tag: a?.tagName, ask: !!a?.closest('fieldset.hp-ask'), cls: a?.className || '', text: (a?.textContent || '').trim().slice(0, 40) }; });
   const pending = () => page.evaluate(() => +document.documentElement.dataset.hpPending);
   const total = await pending();
+  const warnText = () => page.evaluate(() => document.querySelector('.hp-dlg-warn')?.textContent || '');
+  if ((await warnText()).includes('未確認')) fail('まだ何も答えていないのに、未確認の案内が出る');
   await page.keyboard.press('n');
   if (!(await active()).ask) fail('n で未確認の判断に移らない');
   await page.keyboard.press('2'); await settle(page);
+  if (total > 1 && !(await warnText()).includes(`未確認の ${total - 1} 件は`)) fail('1件答えても、残りの未確認の案内が出ない');
   for (let i = 0; i < 12 && (await pending()) > 0; i++) {
     await page.keyboard.press('n'); if (!(await active()).ask) { fail('n で次の未確認の判断に移らない'); break; }
     await page.keyboard.press('Enter'); await settle(page);
@@ -285,7 +288,7 @@ for (const width of [390, 768, 1280]) {
     await swap(v2);
     let md = await head();
     if (!md.includes(`判断 ${keep}/${total} 確認済み`)) errors.push(`再発行: 変わっていない判断だけを引き継いでいない(${md.split('\n')[2]})`);
-    if (keep && !(await c.page.locator('.hp-dlg-warn').textContent()).includes(`判断 ${keep} 件は、前の版の回答を引き継いだ`)) errors.push('再発行: 引き継いだことが画面に出ない');
+    if (keep && !(await c.page.locator('.hp-dlg-warn').textContent()).includes(`判断 ${keep} 件は、前の版の回答を引き継ぎました`)) errors.push('再発行: 引き継いだことが画面に出ない');
     if (keep === total - 1 && !md.includes('最後の判断の補足')) errors.push('再発行: 引き継いだ判断の補足が消えた');
     if (md.includes('前の版への指摘')) errors.push('再発行: 全体への指摘を引き継いだ');
     await swap(v1);

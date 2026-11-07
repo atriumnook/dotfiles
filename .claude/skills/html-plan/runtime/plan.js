@@ -1104,17 +1104,17 @@ async function connectClaude() {
   try { const [db, comments] = await Promise.all([c.use('db'), c.use('comments')]); if (db && comments) CL = { db, comments }; } catch {}
 }
 const SEND_ERR = {
-  consent_required: 'ページからのコメントが許可されなかったので、送信していない。「コピーで返す」を押してください。',
-  forbidden: 'このページからはコメントできない。「コピーで返す」を押してください。',
-  claude_unavailable: 'Claude のセッションに届けられない。「コピーで返す」を押してください。',
-  rate_limited: '短時間に送信が集中したため、送信できなかった。少し待ってからもう一度押してください。',
+  consent_required: 'コメントが許可されなかったため、送信できませんでした。「コピーで返す」を押してください。',
+  forbidden: 'このページからはコメントできません。「コピーで返す」を押してください。',
+  claude_unavailable: 'Claude のセッションに届けられません。「コピーで返す」を押してください。',
+  rate_limited: '短時間に送信が集中したため、送信できませんでした。少し待ってからもう一度押してください。',
 };
 function buildDialogs() {
   const status = h('p', { class: 'hp-dlg-status', role: 'status' });
   const sum = h('p', { class: 'hp-dlg-sum' });
   const warn = h('p', { class: 'hp-dlg-warn' });
   const conf = h('div', { class: 'hp-dlg-conf' });
-  const overall = h('textarea', { class: 'hp-field hp-overall', rows: '3', placeholder: '対象を選ばない指摘や、足りないニュアンス' });
+  const overall = h('textarea', { class: 'hp-field hp-overall', rows: '3', placeholder: '特定の箇所に付けられない指摘を書く' });
   const out = h('textarea', { class: 'hp-out', spellcheck: 'false' });
   const swap = (t) => h('span', { class: 'hp-swap' }, t);
   const proceed = h('button', { type: 'button', class: 'hp-btn primary hp-go' }, swap(HP.VERDICT.proceed), h('kbd', null, 'Ctrl+Enter'));
@@ -1173,7 +1173,7 @@ function buildDialogs() {
     let hand = '';
     if (S.draft) { const ops = HP.diffOps(S.draft.base, S.draft.text); hand = ` · 手編集 +${ops.filter((o) => o[0] === '+').length} −${ops.filter((o) => o[0] === '-').length} 行`; }
     sum.textContent = HP.statusLine(m, false).replace('状況: ', '') + hand;
-    warn.textContent = [pend ? `未確認が ${pend} 件ある。このまま返すと、Claude が未確認の判断をチャットで確認する。` : '', S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継いだ。` : ''].filter(Boolean).join(' ');
+    warn.textContent = [pend && pend < m.asks.length ? `未確認の ${pend} 件は、回答を返したあとに Claude がチャットで確認します。` : '', S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継ぎました。` : ''].filter(Boolean).join(' ');
     discard.hidden = !S.draft; editedDot.hidden = !S.draft;
     const keys = Object.keys(S.comments).filter((k) => targets.has(k));
     cwrap.hidden = !keys.length;
@@ -1186,7 +1186,7 @@ function buildDialogs() {
       const drop = () => { S.draft.conflicts.splice(i, 1); save(); render(); };
       const use = () => { S.draft.text = HP.applyConflict(S.draft.text, c); drop(); };
       return h('div', { class: 'hp-conf' },
-        h('p', null, 'ページでの変更と手編集が同じ行を変更している。いまは手編集を残している。'),
+        h('p', null, 'ページでの変更と手編集が同じ行を変更しています。いまは手編集を残しています。'),
         h('div', { class: 'hp-conf-side' }, h('b', null, '手編集'), h('pre', null, c.mine.join('\n') || '(手編集で消した)')),
         h('div', { class: 'hp-conf-side' }, h('b', null, 'ページでの変更'), h('pre', null, c.theirs.join('\n') || '(この行はなくなった)')),
         h('div', { class: 'hp-dlg-acts' },
@@ -1216,8 +1216,8 @@ function buildDialogs() {
     ta.remove(); return ok;
   };
   const copyBack = async (verdict, btn) => {
-    if (await toClipboard(HP.response(verdict))) { if (btn) flash(btn, 'コピーした'); status.textContent = 'コピーした。Claude Code に貼り付けてください。'; }
-    else { showTab('body'); out.focus(); out.select(); status.textContent = 'コピーできない。本文を選択したので、手でコピーしてください。'; }
+    if (await toClipboard(HP.response(verdict))) { if (btn) flash(btn, 'コピーしました'); status.textContent = 'コピーしました。Claude Code に貼り付けてください。'; }
+    else { showTab('body'); out.focus(); out.select(); status.textContent = 'コピーできませんでした。本文を選択したので、手でコピーしてください。'; }
   };
   const sendBack = async (verdict, btn) => {
     proceed.disabled = revise.disabled = true; status.textContent = '送信中…';
@@ -1226,8 +1226,8 @@ function buildDialogs() {
       const state = HP.statusLine(m, !!S.draft);
       await CL.db.doc(`responses/${id}`).set({ title: m.title, verdict, markdown: HP.response(verdict), createdAt: new Date().toISOString() });
       await CL.comments.sendToClaude({ anchor: await CL.comments.anchorFor($('hp-plan h1') || $('hp-plan')), text: `html-plan の回答「${m.title}」\n${HP.nextLine(verdict)}\n${state}\n全文は db の responses/${id} にある。` });
-      flash(btn, '送った'); status.textContent = 'Claude に送った。返信はこのページのコメントに届く。';
-    } catch (e) { status.textContent = SEND_ERR[e?.code] || `送信できなかった(${e?.code || e?.message || e})。「コピーで返す」を押してください。`; copyOnly.hidden = false; }
+      flash(btn, '送信しました'); status.textContent = 'Claude に送りました。返信はこのページのコメントに届きます。';
+    } catch (e) { status.textContent = SEND_ERR[e?.code] || `送信できませんでした(${e?.code || e?.message || e})。「コピーで返す」を押してください。`; copyOnly.hidden = false; }
     finally { proceed.disabled = revise.disabled = false; }
   };
   const submit = (verdict, btn) => (sendable ? sendBack : copyBack)(verdict, btn);
@@ -1287,7 +1287,7 @@ function buildDialogs() {
     try {
       const v = await CL.comments.canSendToClaude();
       sendable = v === 'available'; copyOnly.hidden = !sendable;
-      if (v === 'writers_only') status.textContent = '編集権限がないので Claude には送れない。下のボタンで回答をコピーしてください。';
+      if (v === 'writers_only') status.textContent = '編集権限がないので Claude には送れません。下のボタンで回答をコピーしてください。';
     } catch { sendable = false; }
   };
   HP.checkSend = checkSend;
