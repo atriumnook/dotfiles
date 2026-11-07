@@ -761,8 +761,6 @@ function paintStrikes() {
     [...list.querySelectorAll('.hp-row')].forEach((row) => {
       const d = +row.style.getPropertyValue('--d');
       if (cut >= 0 && d <= cut) cut = -1;
-      // 取り消しが下へ及ぶ様子を、深さの順に 30ms ずつずらして見せる(全体で 300ms 未満)
-      row.style.transitionDelay = cut >= 0 && live() ? `${Math.min(120, 60 + (d - cut - 1) * 30)}ms` : '';
       row.classList.toggle('under-struck', cut >= 0);
       if (cut < 0 && row.classList.contains('struck')) cut = d;
     });
