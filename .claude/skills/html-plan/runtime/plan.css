@@ -254,12 +254,12 @@ textarea.hp-edit { display: block; width: 100%; min-height: 8em; margin: 0; padd
 /* ── mockup ── */
 .hp-mock { margin: 0; }
 .hp-mock > .hp-stage, .hp-mock > .hp-chrome { max-width: var(--w); }   /* 枠を mock の設計幅に合わせ、余白の白を出さない */
-.hp-mock[data-frame="phone"] > .hp-stage { max-width: calc(var(--w) + 16px); }
+.hp-mock[data-frame="phone"] > .hp-stage { max-width: calc(var(--w) + 2px); }
 .hp-mock .hp-stage { position: relative; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: #fff; }
 .hp-mock-host { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
 .hp-mock[data-frame="browser"] .hp-stage, .hp-mock[data-frame="terminal"] .hp-stage { border-top: 0; border-radius: 0 0 var(--r) var(--r); }
 .hp-mock[data-frame="terminal"] .hp-stage { background: #18181b; }
-.hp-mock[data-frame="phone"] .hp-stage { border: 8px solid #2a2a27; border-radius: 28px; }
+.hp-mock[data-frame="phone"] .hp-stage { border: 1px solid var(--line); border-radius: 24px; }
 .hp-chrome { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border: 1px solid var(--line); border-radius: var(--r) var(--r) 0 0; background: var(--sunk);
   color: var(--ink-2); font: 12px/1.5 var(--mono); }
 .hp-chrome.term { background: #2a2a2e; border-color: #2a2a2e; color: #c9c7c0; }
