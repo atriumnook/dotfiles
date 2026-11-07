@@ -123,17 +123,18 @@ for (const width of [390, 768, 1280]) {
   const active = () => page.evaluate(() => { const a = document.activeElement; return { tag: a?.tagName, ask: !!a?.closest('fieldset.hp-ask'), cls: a?.className || '', text: (a?.textContent || '').trim().slice(0, 40) }; });
   const pending = () => page.evaluate(() => +document.documentElement.dataset.hpPending);
   const total = await pending();
-  const warnText = () => page.evaluate(() => document.querySelector('.hp-dlg-warn')?.textContent || '');
-  if ((await warnText()).includes('未確認')) fail('まだ何も答えていないのに、未確認の案内が出る');
+  const secs = () => page.evaluate(() => [...document.querySelectorAll('.hp-asec')].filter((s) => !s.hidden).map((s) => s.querySelector('.hp-asec-h').textContent).join(' / '));
+  if (await secs() !== `未回答${total}`) fail(`答える前の欄が「未回答${total}」だけでない(${await secs()})`);
+  if ((await page.evaluate(() => document.querySelector('.hp-composer').textContent)).includes('チャットで確認')) fail('未回答の欄の代わりに案内の文が残っている');
   await page.keyboard.press('n');
-  if (!(await active()).ask) fail('n で未確認の判断に移らない');
+  if (!(await active()).ask) fail('n で未回答の判断に移らない');
   await page.keyboard.press('2'); await settle(page);
-  if (total > 1 && !(await warnText()).includes(`未確認の ${total - 1} 件は`)) fail('1件答えても、残りの未確認の案内が出ない');
+  if (total > 1 && await secs() !== `未回答${total - 1} / 回答済み1`) fail(`1件答えたあとの欄の件数が合わない(${await secs()})`);
   for (let i = 0; i < 12 && (await pending()) > 0; i++) {
-    await page.keyboard.press('n'); if (!(await active()).ask) { fail('n で次の未確認の判断に移らない'); break; }
+    await page.keyboard.press('n'); if (!(await active()).ask) { fail('n で次の未回答の判断に移らない'); break; }
     await page.keyboard.press('Enter'); await settle(page);
   }
-  if (await pending()) fail(`判断が ${await pending()} 件未確認のまま残った`);
+  if (await pending()) fail(`判断が ${await pending()} 件未回答のまま残った`);
   // claim にコメントする
   await page.keyboard.press('O'); await page.keyboard.press('j');
   if (!(await active()).cls.includes('hp-toggle')) fail('j で claim の見出しに移らない');
@@ -167,7 +168,7 @@ for (const width of [390, 768, 1280]) {
   const expect = { '## 判断': '判断の節', '**変更**': '変えた判断', '提案どおり': '確認した判断', '期限のないタスク': 'claim へのコメント', 'ここは 404': '行へのコメント', '## 編集': '編集の節', '+ALTER TABLE': '編集の diff' };
   if (strikeRow) expect['## 取り消し'] = '取り消しの節';
   Object.entries(expect).forEach(([s, what]) => { if (!md.includes(s)) fail(`回答に${what}がない(「${s}」)`); });
-  if (md.includes('未確認')) fail('すべて確認したのに回答に「未確認」が残る');
+  if (md.includes('未回答')) fail('すべて答えたのに回答に「未回答」が残る');
   if (md.indexOf('期限のないタスク') > md.indexOf('ここは 404')) fail('回答のコメントがページ上の順に並んでいない');
   writeFileSync(resolve(out, 'response.md'), md);
   await page.keyboard.press('Escape');
@@ -284,10 +285,10 @@ for (const width of [390, 768, 1280]) {
     await c.page.evaluate(() => document.querySelectorAll('.hp-confirm').forEach((b) => b.click()));
     await c.page.fill('.hp-overall', '前の版への指摘');
     await c.page.evaluate(() => { const n = [...document.querySelectorAll('.hp-ask-note')].at(-1); n.value = '最後の判断の補足'; n.dispatchEvent(new Event('input', { bubbles: true })); }); await settle(c.page);
-    if (!(await head()).includes(`判断 ${total}/${total} 確認済み`)) errors.push('再発行: 検査の準備で全判断を確認済みにできない');
+    if (!(await head()).includes(`判断 ${total}/${total} 回答済み`)) errors.push('再発行: 検査の準備で全判断を回答済みにできない');
     await swap(v2);
     let md = await head();
-    if (!md.includes(`判断 ${keep}/${total} 確認済み`)) errors.push(`再発行: 変わっていない判断だけを引き継いでいない(${md.split('\n')[2]})`);
+    if (!md.includes(`判断 ${keep}/${total} 回答済み`)) errors.push(`再発行: 変わっていない判断だけを引き継いでいない(${md.split('\n')[2]})`);
     if (keep && !(await c.page.locator('.hp-dlg-warn').textContent()).includes(`判断 ${keep} 件は、前の版の回答を引き継ぎました`)) errors.push('再発行: 引き継いだことが画面に出ない');
     if (keep === total - 1 && !md.includes('最後の判断の補足')) errors.push('再発行: 引き継いだ判断の補足が消えた');
     if (md.includes('前の版への指摘')) errors.push('再発行: 全体への指摘を引き継いだ');
@@ -297,14 +298,14 @@ for (const width of [390, 768, 1280]) {
     await c.page.evaluate(() => { const n = [...document.querySelectorAll('.hp-ask-note')].at(-1); n.value = '前の版にあとから書いた補足'; n.dispatchEvent(new Event('input', { bubbles: true })); }); await settle(c.page);
     await swap(v2);
     md = await head();
-    if (!md.includes(`判断 ${keep}/${total} 確認済み`) || md.includes('前の版にあとから書いた補足')) errors.push('再発行: 引き継いだ回答が保存されず、再読み込みで変わる');
+    if (!md.includes(`判断 ${keep}/${total} 回答済み`) || md.includes('前の版にあとから書いた補足')) errors.push('再発行: 引き継いだ回答が保存されず、再読み込みで変わる');
     await swap(v2.replace(/(<hp-ask\b(?![\s\S]*<hp-ask\b))/, '<p>(claim を変更)</p>$1'));
-    if (!(await head()).includes(`判断 ${keepBoth}/${total} 確認済み`)) errors.push(`再発行: claim が変わった判断を引き継いだ(${(await head()).split('\n')[2]})`);
+    if (!(await head()).includes(`判断 ${keepBoth}/${total} 回答済み`)) errors.push(`再発行: claim が変わった判断を引き継いだ(${(await head()).split('\n')[2]})`);
     await swap(v2);
     await c.page.getByRole('button', { name: '回答を消去' }).click(); await c.page.getByRole('button', { name: 'もう一度押すと消去' }).click();
     await c.page.waitForLoadState(); await c.page.waitForSelector('html[data-hp-ready]');
     await swap(v1.replace(/(<hp-ask\b[^>]*>\s*<p>)/, '$1(再度変更)'));
-    if (!(await head()).includes(`判断 0/${total} 確認済み`)) errors.push('再発行: 回答を消去したのに、次の版へ引き継がれた');
+    if (!(await head()).includes(`判断 0/${total} 回答済み`)) errors.push('再発行: 回答を消去したのに、次の版へ引き継がれた');
     c.logs.forEach((m) => errors.push(`再発行: ${m}`));
     await c.ctx.close();
   } else if (/<hp-ask\b/.test(v1)) warns.push('再発行: 直下に <p> のある hp-ask がなく、再発行の検査を省いた');
@@ -363,7 +364,7 @@ for (const width of [390, 768, 1280]) {
   if (!ind.label) fail('選択の枠が案の上に被さっている');
   // 畳む前の timer とスクロールは animation に出ないので、次の判断の claim が画面に入るのを待つ
   await page.waitForFunction(() => { const second = document.querySelectorAll('fieldset.hp-ask')[1], r = document.querySelector('.hp-ask-anchor[data-now]')?.getBoundingClientRect(), p = document.querySelector('hp-plan').getBoundingClientRect(); return second && !second.hasAttribute('data-compact') && r && r.top >= p.top && r.bottom <= p.bottom; }, null, { timeout: 3000 }).catch(() => {}); await quiet(page);
-  const flow = await page.evaluate(() => { const fs = [...document.querySelectorAll('fieldset.hp-ask')]; const open = fs.filter((f) => !f.hasAttribute('data-compact')); const anchors = document.querySelectorAll('.hp-ask-anchor[data-now]'); const r = anchors[0]?.getBoundingClientRect(); const p = document.querySelector('hp-plan').getBoundingClientRect(); return { open: open.length, second: open[0] === fs[1], now: anchors.length, inView: r && r.top >= p.top && r.bottom <= p.bottom, top: document.querySelector('hp-plan').scrollTop }; });
+  const flow = await page.evaluate(() => { const fs = [...document.querySelectorAll('fieldset.hp-ask')]; const open = fs.filter((f) => !f.hasAttribute('data-compact')); const anchors = document.querySelectorAll('.hp-ask-anchor[data-now]'); const r = anchors[0]?.getBoundingClientRect(); const p = document.querySelector('hp-plan').getBoundingClientRect(); return { open: open.length, second: !!open[0]?.querySelector('.hp-ask-no')?.textContent.startsWith('判断 2/'), now: anchors.length, inView: r && r.top >= p.top && r.bottom <= p.bottom, top: document.querySelector('hp-plan').scrollTop }; });
   if (flow.open !== 1 || !flow.second) fail('案を押しても次の判断が開かない');
   if (flow.now !== 1 || !flow.inView) fail('開いた判断の claim が計画の画面内に来ない');
   if (flow.top === before) fail('判断を進めても左の計画が動かない');
@@ -378,8 +379,9 @@ for (const width of [390, 768, 1280]) {
   await page.click('.hp-tab[data-tab="answer"]'); await quiet(page);
   const reopened = await page.evaluate(async () => {
     const fs = [...document.querySelectorAll('fieldset.hp-ask')], anchors = [...document.querySelectorAll('.hp-ask-anchor')];
+    const no = (f) => +f.querySelector('.hp-ask-no').textContent.match(/判断 (\d+)\//)[1];
     const cur = fs.findIndex((f) => !f.hasAttribute('data-compact')), other = fs.findIndex((f) => f.hasAttribute('data-compact'));
-    fs[other].querySelector('.hp-ask-sum').click(); anchors[cur].click();
+    fs[other].querySelector('.hp-ask-sum').click(); anchors[no(fs[cur]) - 1].click();
     await new Promise((r) => setTimeout(r, 800));
     const stuck = [...fs[cur].children].filter((k) => k.getClientRects().length && +getComputedStyle(k).opacity < 0.9).length;
     return { open: !fs[cur].hasAttribute('data-compact'), count: fs.filter((f) => !f.hasAttribute('data-compact')).length, stuck };

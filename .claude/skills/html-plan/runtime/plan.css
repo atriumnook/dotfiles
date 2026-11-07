@@ -315,8 +315,6 @@ fieldset.hp-ask[data-state="confirmed"] .hp-ask-status::before { content: "✓ "
 fieldset.hp-ask[data-compact] { padding: 0; background: var(--sunk); box-shadow: none; }
 fieldset.hp-ask[data-compact] > :not(.hp-ask-sum) { display: none; }
 fieldset.hp-ask[data-compact] > .hp-ask-sum { display: flex; align-items: baseline; gap: 8px; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--r); background: none; color: var(--ink); font: 13.5px/1.55 var(--sans); text-align: left; cursor: pointer; }
-.hp-ask-sum .hp-i { align-self: center; width: 14px; height: 14px; color: var(--green); }
-.hp-ask-sum .ring { align-self: center; flex: none; width: 10px; height: 10px; margin: 0 2px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--accent); }
 .hp-ask-sum .q { flex: 1; min-width: 0; color: var(--ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; overflow: hidden; }
 .hp-ask-sum .a { flex: none; max-width: 45%; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hp-ask-sum .a.muted { color: var(--ink-3); font-weight: 400; }
@@ -388,11 +386,26 @@ textarea.hp-out:focus-visible { outline: 2px solid var(--focus); outline-offset:
 .hp-prog { white-space: nowrap; color: var(--ink-3); } .hp-prog b { color: var(--ink); font-weight: 600; }
 .hp-dots { display: flex; align-items: center; }
 .hp-dot { display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer; }
-.hp-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--accent); transition: background-color 180ms ease, box-shadow 180ms ease; }
-.hp-dot[data-state="confirmed"]::before { background: var(--ink); box-shadow: none; }
-.hp-dot[data-state="changed"]::before { box-shadow: inset 0 0 0 2.5px var(--changed); }
 .hp-prog-n { display: inline-grid; overflow: clip; vertical-align: bottom; } .hp-prog-n > * { grid-area: 1 / 1; display: inline-block; }
 @media (max-width: 560px) { .hp-bar { left: 12px; right: 12px; transform: none; justify-content: space-between; padding-left: 12px; } .hp-bar kbd, .hp-dots { display: none; } .hp-prog { font-size: 13px; } }
 
 @media print { .hp-bar, .hp-composer, .hp-tools, .hp-cbtn, .hp-lbtn { display: none !important; } body { display: block; height: auto; overflow: visible; } hp-plan { overflow: visible; } .hp-body[hidden] { display: block !important; } }
 
+/* ── 判断の状態と未回答の欄 ── */
+/* 状態の印。Linear の状態の印に合わせる。未回答は空の円、一部だけ回答は半円、回答はチェック入りの塗りの円(提案と違う案なら変更の色) */
+.hp-mark { flex: none; align-self: center; width: 12px; height: 12px; background: var(--ink-3); -webkit-mask: var(--mk) center / contain no-repeat; mask: var(--mk) center / contain no-repeat; --mk: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2014%2014'%3E%3Ccircle%20cx%3D'7'%20cy%3D'7'%20r%3D'5.25'%20fill%3D'none'%20stroke%3D'black'%20stroke-width%3D'1.5'%2F%3E%3C%2Fsvg%3E"); }
+.hp-mark[data-state="partial"] { --mk: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2014%2014'%3E%3Ccircle%20cx%3D'7'%20cy%3D'7'%20r%3D'5.25'%20fill%3D'none'%20stroke%3D'black'%20stroke-width%3D'1.5'%2F%3E%3Cpath%20d%3D'M7%207V3.5A3.5%203.5%200%200%201%207%2010.5Z'%2F%3E%3C%2Fsvg%3E"); background: var(--accent); }
+.hp-mark[data-state="confirmed"] { --mk: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2014%2014'%3E%3Cdefs%3E%3Cmask%20id%3D'c'%3E%3Crect%20width%3D'14'%20height%3D'14'%20fill%3D'white'%2F%3E%3Cpath%20d%3D'M4.4%207.2l1.8%201.8%203.5-3.6'%20fill%3D'none'%20stroke%3D'black'%20stroke-width%3D'1.6'%20stroke-linecap%3D'round'%20stroke-linejoin%3D'round'%2F%3E%3C%2Fmask%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D'7'%20cy%3D'7'%20r%3D'6'%20mask%3D'url(%23c)'%2F%3E%3C%2Fsvg%3E"); background: var(--accent); }
+.hp-mark[data-state="changed"] { --mk: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2014%2014'%3E%3Cdefs%3E%3Cmask%20id%3D'c'%3E%3Crect%20width%3D'14'%20height%3D'14'%20fill%3D'white'%2F%3E%3Cpath%20d%3D'M4.4%207.2l1.8%201.8%203.5-3.6'%20fill%3D'none'%20stroke%3D'black'%20stroke-width%3D'1.6'%20stroke-linecap%3D'round'%20stroke-linejoin%3D'round'%2F%3E%3C%2Fmask%3E%3C%2Fdefs%3E%3Ccircle%20cx%3D'7'%20cy%3D'7'%20r%3D'6'%20mask%3D'url(%23c)'%2F%3E%3C%2Fsvg%3E"); background: var(--changed); }
+.hp-mark[data-state="none"] { visibility: hidden; }
+.hp-ask-sum .hp-mark { margin: 0 2px; }
+.hp-dot::before { content: none; }
+/* 未回答と回答済みの欄。件数が見出しに出るので、残りを案内する文は置かない */
+.hp-asks { gap: 14px; }
+.hp-asec[hidden] { display: none; }
+.hp-asec-h { display: flex; align-items: baseline; gap: 6px; margin: 0 2px 6px; color: var(--ink-3); font: 600 12px/1.4 var(--sans); letter-spacing: .02em; }
+.hp-asec-h .n { color: var(--ink); font-variant-numeric: tabular-nums; }
+.hp-alist { display: flex; flex-direction: column; gap: 6px; }
+/* 判断の下の状態の行は画面に出さず、読み上げにだけ残す */
+.hp-ask-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.hp-ask-foot { justify-content: flex-end; }

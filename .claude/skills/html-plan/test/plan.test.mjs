@@ -34,16 +34,16 @@ test('parseCalls: mark・字下げ・場所・注記を読み、空行で入口�
 
 test('statusLine と nextLine: formatHead の2行目と3行目に一致する', () => {
   const r = { title: '計画', asks: [{ status: 'pending' }, { status: 'changed' }], edits: [], struck: [], comments: [] };
-  assert.equal(HP.statusLine(r, true), '状況: 判断 1/2 確認済み · 変更 1 · 手編集あり');
+  assert.equal(HP.statusLine(r, true), '状況: 判断 1/2 回答済み · 変更 1 · 手編集あり');
   assert.equal(HP.nextLine('proceed'), '次の動き: **実装に進める**');
   assert.equal(HP.formatHead(r, 'proceed', true), `# 回答: 計画\n${HP.nextLine('proceed')}\n${HP.statusLine(r, true)}\n`);
 });
 
-test('carriedAnswer: 質問・案・既定値・claim が同じで確認済みの判断だけを引き継ぐ', () => {
+test('carriedAnswer: 質問・案・既定値・claim が同じで回答済みの判断だけを引き継ぐ', () => {
   const print = HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['3']);
   const last = { asked: { limit: print, tz: print }, confirmed: { limit: true }, answers: { limit: ['10'], tz: ['3'] } };
   assert.deepEqual(HP.carriedAnswer(last, 'limit', print), ['10']);
-  assert.equal(HP.carriedAnswer(last, 'tz', print), null, '未確認');
+  assert.equal(HP.carriedAnswer(last, 'tz', print), null, '未回答');
   assert.equal(HP.carriedAnswer(last, 'other', print), null, '前の版にない');
   for (const changed of [HP.askPrint('上限は?', [['3', '3件'], ['10', '10件']], ['3']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件(要一覧)']], ['3']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['10']), HP.askPrint('上限は', [['3', '3件'], ['10', '10件']], ['3'], '変わった claim')]) assert.equal(HP.carriedAnswer(last, 'limit', changed), null);
   assert.equal(HP.carriedAnswer(null, 'limit', print), null, '前の版がない');
@@ -141,10 +141,10 @@ const answer = {
 
 test('formatResponse: 次の動きと状況を先頭に置き、本文は全体→判断→編集→取り消し→コメントの順にする', () => {
   const md = HP.formatResponse(answer, { verdict: 'revise' });
-  assert.ok(md.startsWith('# 回答: 計画\n次の動き: **計画を直して再提示する**\n状況: 判断 2/3 確認済み · 変更 1 · 編集 1 · 取り消し 1 · コメント 1\n\n## 全体\n> 期限の扱いを先に決めたい\n'));
+  assert.ok(md.startsWith('# 回答: 計画\n次の動き: **計画を直して再提示する**\n状況: 判断 2/3 回答済み · 変更 1 · 編集 1 · 取り消し 1 · コメント 1\n\n## 全体\n> 期限の扱いを先に決めたい\n'));
   assert.match(md, /- \*\*変更\*\* \[1\.2\] 上限は\? → \*\*10件\*\* `limit=10`\(提案は 3件\)\n {2}> 一覧も欲しい\n {2}> 2行目/);
   assert.match(md, /- 提案どおり \[2\] 再送は\? → \*\*しない\*\* `retry=none`\n/);
-  assert.match(md, /- \*\*未確認\*\* \[3\] 経路は\? → \*\*push\*\* `channel=push`\(提案の案\)/);
+  assert.match(md, /- \*\*未回答\*\* \[3\] 経路は\? → \*\*push\*\* `channel=push`\(提案の案\)/);
   assert.match(md, /````diff\n[\s\S]*-```\n[\s\S]*````/, 'diff に ``` があれば fence を長くする');
   assert.match(md, /## 取り消し\n- \[1\.1 · api\/metrics\.ts:40\] `track\(\)`/);
   assert.match(md, /## コメント\n- \[1\] 主張\n {2}> なぜ\?/);

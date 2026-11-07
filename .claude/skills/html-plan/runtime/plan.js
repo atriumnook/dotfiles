@@ -214,7 +214,7 @@ HP.lineDiff = function lineDiff(a, b, name = 'text', ctx = 3) {
 const fence = (s) => '`'.repeat(Math.max(3, ...(String(s).match(/`+/g) || []).map((x) => x.length + 1)));
 const quoted = (t, ind) => String(t).trim().split('\n').map((l) => `${ind}> ${l}`);
 const tick = (v) => '`' + String(v).replace(/`/g, 'ˋ') + '`';
-HP.STATUS = { pending: '未確認', confirmed: '提案どおり', changed: '変更' };
+HP.STATUS = { pending: '未回答', confirmed: '提案どおり', changed: '変更' };
 HP.VERDICT = { proceed: '実装に進める', revise: '計画を直して再提示する' };
 // 本文。読み手が編集する部分。判断は1件1行で順序を固定する(状態が変わっても行の位置が動かず、3-way merge が効く)
 HP.formatBody = function formatBody(r) {
@@ -225,7 +225,7 @@ HP.formatBody = function formatBody(r) {
     r.asks.forEach((a) => {
       const pick = a.picked.length ? a.picked.map((p) => `**${p}**`).join('、') : '(選択なし)';
       const val = a.values.length ? ' ' + tick(`${a.id}=${a.values.join(',')}`) : '';
-      const head = a.status === 'changed' ? '**変更**' : a.status === 'pending' ? '**未確認**' : '提案どおり';
+      const head = a.status === 'changed' ? '**変更**' : a.status === 'pending' ? '**未回答**' : '提案どおり';
       const tail = a.status === 'changed' ? `(提案は ${a.proposed.join('、') || 'なし'})` : a.status === 'pending' ? '(提案の案)' : '';
       out.push(`- ${head} [${a.no}] ${a.q} → ${pick}${val}${tail}`);
       if (a.note) out.push(...quoted(a.note, '  '));
@@ -248,7 +248,7 @@ HP.formatBody = function formatBody(r) {
 // 先頭の2行と末尾の注記はページが付ける。読み手の編集の外にあるので、手編集されてもページの記録として読める
 HP.statusLine = function statusLine(r, edited) {
   const pend = r.asks.filter((a) => a.status === 'pending').length, chg = r.asks.filter((a) => a.status === 'changed').length;
-  const st = [r.asks.length ? `判断 ${r.asks.length - pend}/${r.asks.length} 確認済み` : '判断なし'];
+  const st = [r.asks.length ? `判断 ${r.asks.length - pend}/${r.asks.length} 回答済み` : '判断なし'];
   [['変更', chg], ['編集', r.edits.length], ['取り消し', r.struck.length], ['コメント', r.comments.length]].forEach(([k, n]) => { if (n) st.push(`${k} ${n}`); });
   if (edited) st.push('手編集あり');
   return `状況: ${st.join(' · ')}`;
@@ -449,7 +449,7 @@ function foldAsk(a, compact) {
     if (folding) { const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = ''; if (live()) tweenHeight(fs, from, rectH(fs)); }
     return;
   }
-  if (!live()) { tweens.get(fs)?.cancel(); fs.style.overflow = ''; fs.toggleAttribute('data-compact', compact); return; }
+  if (!live()) { tweens.get(fs)?.cancel(); fs.style.overflow = ''; fs.toggleAttribute('data-compact', compact); if (compact) sortAsks(); return; }
   const from = rectH(fs); tweens.get(fs)?.cancel(); fs.style.overflow = '';
   fs.toggleAttribute('data-compact', compact); const to = rectH(fs);
   const kids = [...fs.children].filter((k) => k !== a.sumBtn);
@@ -461,6 +461,7 @@ function foldAsk(a, compact) {
       fs._foldT = null;
       fs.toggleAttribute('data-compact', true);
       kids.forEach((k) => k.getAnimations().forEach((x) => x.cancel()));
+      sortAsks();
       a.sumBtn.animate(blurIn(6), SP.swap);
     }, 110);
   } else {
@@ -908,7 +909,7 @@ function renderWhy(el) {
   el.replaceChildren(det);
 }
 
-/* ── hp-ask: 判断。読み手が選び直すか「この案で確定」を押すまでは未確認 ── */
+/* ── hp-ask: 判断。読み手が選び直すか「この案で確定」を押すまでは未回答 ── */
 function renderAsk(el, idx, total, claimSrc) {
   const id = el.id || `ask${idx + 1}`;
   const q = el.querySelector(':scope > p'); const qText = q ? q.textContent.trim() : (el.getAttribute('q') || '');
@@ -939,7 +940,7 @@ function renderAsk(el, idx, total, claimSrc) {
   note.addEventListener('input', () => { if (note.value.trim()) S.notes[id] = note.value; else delete S.notes[id]; save(); composerSync(); });
   const status = h('span', { class: 'hp-ask-status', 'aria-live': 'polite' });
   const confirm = h('button', { type: 'button', class: 'hp-btn primary small hp-confirm' }, icon('check'), 'この案で確定');
-  const later = h('button', { type: 'button', class: 'hp-btn small', hidden: '' }, '次の未確認へ', h('kbd', null, 'n'));
+  const later = h('button', { type: 'button', class: 'hp-btn small', hidden: '' }, '次の未回答へ', h('kbd', null, 'n'));
   const sumBtn = h('button', { type: 'button', class: 'hp-ask-sum' });
   fs.append(note, h('div', { class: 'hp-ask-foot' }, status, confirm, later), sumBtn);
   const anchor = h('button', { type: 'button', class: 'hp-ask-anchor' });
@@ -968,7 +969,7 @@ function renderAsk(el, idx, total, claimSrc) {
   anchor.addEventListener('click', () => openAsk(a, { focus: true }));
   // シートを閉じたあとに、答えた判断を畳む。開いているあいだは畳まない(コピーの演出と同時に動かさない)
   a.settle = () => { if (a.state() !== 'pending') a.fold(true); };
-  // マウスで未確認の判断に答えたら、枠が滑り終わるのを見せてから次へ進む。提案の案をもう一度押すと確定になる
+  // マウスで未回答の判断に答えたら、枠が滑り終わるのを見せてから次へ進む。提案の案をもう一度押すと確定になる
   opts.addEventListener('click', (e) => {
     if (!e.target.matches('input') || modality !== 'pointer') return;
     const was = a.state();
@@ -1015,18 +1016,38 @@ function nextAsk(from) {
   if (live()) overallEl?.focus({ preventScroll: true }); else $('.hp-go')?.focus();
 }
 
+/* ── 未回答と回答済みの欄 ── */
+// 開いている判断は動かさず、畳んだときに欄を移す。答えた瞬間に動かすと、見ている枠が跳ぶ
+const listPend = h('div', { class: 'hp-alist' }), listDone = h('div', { class: 'hp-alist' });
+const countPend = h('span', { class: 'n' }), countDone = h('span', { class: 'n' });
+const secPend = h('section', { class: 'hp-asec', 'aria-label': '未回答の判断' }, h('h3', { class: 'hp-asec-h' }, '未回答', countPend), listPend);
+const secDone = h('section', { class: 'hp-asec', 'aria-label': '回答済みの判断' }, h('h3', { class: 'hp-asec-h' }, '回答済み', countDone), listDone);
+function sortAsks() {
+  const focused = document.activeElement;
+  [[listPend, (a) => a.state() === 'pending'], [listDone, (a) => a.state() !== 'pending']].forEach(([list, want]) => {
+    asks.forEach((a) => { if (!want(a) || a.fs.parentElement === list) return; if (a.fs.parentElement && !a.fs.hasAttribute('data-compact') && a.fs._foldT == null) return; const next = asks.slice(asks.indexOf(a) + 1).find((x) => x.fs.parentElement === list); list.insertBefore(a.fs, next?.fs || null); });
+  });
+  if (focused && focused !== document.activeElement && document.contains(focused)) focused.focus({ preventScroll: true });   // 移した判断の中にあったフォーカスを戻す
+  const p = asks.filter((a) => a.state() === 'pending').length;
+  countPend.textContent = p; countDone.textContent = asks.length - p;
+  secPend.hidden = !p; secDone.hidden = p === asks.length;
+}
+
 /* ── 状態の表示 ── */
+// 判断の状態の印。Linear の状態の印に合わせ、未回答は空の円、回答はチェック入りの塗りの円(提案と違う案なら変更の色)。
+// claim の一覧では、判断の一部だけに回答した状態を半円にする。どの場所でも同じ印を使う
+const mark = (st, label) => h('span', { class: 'hp-mark', 'data-state': st, ...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': 'true' }) });
+const tocMarks = [];
 function refresh() {
   asks.forEach((a) => {
     const st = a.state(); a.fs.dataset.state = st;
-    const proposed = a.inputs.filter((i) => a.defaults.includes(i.value)).map(labelOf).join('、');
-    a.status.textContent = st === 'pending' ? `未確認 · 提案は ${proposed || 'なし'}` : st === 'changed' ? `変更 · 提案は ${proposed || 'なし'}` : '提案どおり';
+    a.status.textContent = HP.STATUS[st];
     a.confirm.hidden = st !== 'pending';
     a.later.hidden = st === 'pending' || !asks.some((x) => x.state() === 'pending');
     const picked = a.inputs.filter((i) => i.checked).map(labelOf).join('、') || '選択なし';
     a.anchor.dataset.state = st;
-    a.anchor.replaceChildren(h('span', { class: 'n' }, `判断 ${a.label}/${a.total}`), h('span', { class: 'q' }, a.q), h('span', { class: 'a' }, picked), h('span', { class: 's' }, st === 'pending' ? '未確認' : st === 'changed' ? '変更' : '提案どおり'));
-    a.sumBtn.replaceChildren(st === 'pending' ? h('span', { class: 'ring', 'aria-hidden': 'true' }) : icon('check'), h('span', { class: 'q' }, a.q), h('span', { class: st === 'pending' ? 'a muted' : 'a' }, picked), ...(st === 'changed' ? [h('span', { class: 'tag' }, '変更')] : []));
+    a.anchor.replaceChildren(mark(st), h('span', { class: 'n' }, `判断 ${a.label}/${a.total}`), h('span', { class: 'q' }, a.q), h('span', { class: 'a' }, picked), h('span', { class: 's' }, HP.STATUS[st]));
+    a.sumBtn.replaceChildren(mark(st, HP.STATUS[st]), h('span', { class: 'q' }, a.q), h('span', { class: st === 'pending' ? 'a muted' : 'a' }, picked), ...(st === 'changed' ? [h('span', { class: 'tag' }, '変更')] : []));
   });
   $$('hp-claim').forEach((c) => {
     const badges = c._head?.querySelector('.hp-badges'); if (!badges) return;
@@ -1038,18 +1059,20 @@ function refresh() {
     const bk = `${pend}|${changed}|${com}`; if (badges._k === bk) return;
     const first = badges._k == null; badges._k = bk;
     fill(badges,
-      pend ? h('span', { class: 'hp-badge pending' }, `未確認 ${pend}`) : null,
+      pend ? h('span', { class: 'hp-badge pending' }, `未回答 ${pend}`) : null,
       changed ? h('span', { class: 'hp-badge changed' }, `変更 ${changed}`) : null,
       com ? h('span', { class: 'hp-badge' }, `コメント ${com}`) : null);
     if (!first && live()) [...badges.children].forEach((x) => x.animate([{ opacity: 0, scale: 0.8, filter: 'blur(4px)' }, { opacity: 1, scale: 1, filter: 'blur(0)' }], SP.swap));
   });
+  tocMarks.forEach(([c, m]) => { const own = asks.filter((a) => c.contains(a.el)); const done = own.filter((a) => a.state() !== 'pending').length; const st = !own.length ? 'none' : !done ? 'pending' : done < own.length ? 'partial' : 'confirmed'; m.dataset.state = st; if (st === 'none') { m.removeAttribute('role'); m.removeAttribute('aria-label'); m.setAttribute('aria-hidden', 'true'); } else { m.removeAttribute('aria-hidden'); m.setAttribute('role', 'img'); m.setAttribute('aria-label', st === 'pending' ? '判断は未回答' : st === 'partial' ? '判断の一部に回答済み' : '判断はすべて回答済み'); } });
+  sortAsks();
   const pend = asks.filter((a) => a.state() === 'pending').length;
   const num = $('.hp-prog-n'); if (num) roll(num, asks.length - pend);
   $$('.hp-seg-b').forEach((d, i) => { const st = asks[i].state(); d.dataset.state = st; const lb = `判断 ${asks[i].label}: ${HP.STATUS[st]}`; d.setAttribute('aria-label', lb); d.title = lb; });
   $$('.hp-dot').forEach((d, i) => {
-    const st = asks[i].state(), was = d.dataset.state; d.dataset.state = st;
+    const st = asks[i].state(), m = d.firstElementChild, was = m.dataset.state; m.dataset.state = st;
     const lb = `判断 ${asks[i].label}: ${HP.STATUS[st]}`; d.setAttribute('aria-label', lb); d.title = lb;
-    if (was && was !== st && live()) d.animate([{ scale: 0.6 }, { scale: 1 }], { ...SP.pop, pseudoElement: '::before' });
+    if (was && was !== st && live()) m.animate([{ scale: 0.6 }, { scale: 1 }], SP.pop);
   });
   const respond = $('.hp-respond');
   respond?.classList.toggle('accent', !pend); respond?.classList.toggle('primary', !!pend);
@@ -1121,7 +1144,7 @@ function buildDialogs() {
   const tabA = h('button', { type: 'button', class: 'hp-tab', role: 'tab', id: 'hp-tab-answer', 'data-tab': 'answer', 'aria-controls': 'hp-panel-answer' }, '判断と指摘');
   const editedDot = h('span', { class: 'dot', hidden: '', title: '手編集あり' });
   const tabB = h('button', { type: 'button', class: 'hp-tab', role: 'tab', id: 'hp-tab-body', 'data-tab': 'body', 'aria-controls': 'hp-panel-body' }, '本文', editedDot);
-  const asksBox = h('div', { class: 'hp-asks' }, ...asks.map((a) => a.fs));
+  const asksBox = h('div', { class: 'hp-asks' }, secPend, secDone);
   const clist = h('ul', { class: 'hp-clist' });
   const cwrap = h('div', { hidden: '' }, h('span', { class: 'hp-sub' }, 'コメント'), clist);
   const panelA = h('div', { role: 'tabpanel', id: 'hp-panel-answer', 'aria-labelledby': 'hp-tab-answer' },
@@ -1166,7 +1189,7 @@ function buildDialogs() {
     let hand = '';
     if (S.draft) { const ops = HP.diffOps(S.draft.base, S.draft.text); hand = ` · 手編集 +${ops.filter((o) => o[0] === '+').length} −${ops.filter((o) => o[0] === '-').length} 行`; }
     sum.textContent = HP.statusLine(m, false).replace('状況: ', '') + hand;
-    warn.textContent = [pend && pend < m.asks.length ? `未確認の ${pend} 件は、回答を返したあとに Claude がチャットで確認します。` : '', S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継ぎました。` : ''].filter(Boolean).join(' ');
+    warn.textContent = S.carried ? `判断 ${S.carried} 件は、前の版の回答を引き継ぎました。` : '';
     discard.hidden = !S.draft; editedDot.hidden = !S.draft;
     const keys = Object.keys(S.comments).filter((k) => targets.has(k));
     cwrap.hidden = !keys.length;
@@ -1265,7 +1288,7 @@ function buildDialogs() {
   document.body.append(dlg);
   const help = h('dialog', { class: 'hp-dialog hp-help', 'aria-labelledby': 'hp-help-title' },
     h('h2', { id: 'hp-help-title' }, 'キーボード操作'),
-    h('dl', null, ...[['n', '次の未確認の判断へ'], ['1–9', '判断の選択肢を選ぶ'], ['Enter', '判断: この案で確定 / 呼び出し: コードを開く'], ['j / k', '次 / 前の claim へ'], ['c', 'フォーカス中の claim・行にコメント'], ['x', '呼び出しの変更を取り消す'], ['↑ ↓', 'コードと呼び出しの行を移動'], ['o / O', 'すべて開く / すべて閉じる'], ['r', '全体への指摘へ'], ['Ctrl+Enter', '回答: 実装に進める(入力欄の中では働かない)'], ['?', 'この一覧'], ['Esc', '閉じる']].flatMap(([k, v]) => [h('dt', null, h('kbd', null, k)), h('dd', null, v)])),
+    h('dl', null, ...[['n', '次の未回答の判断へ'], ['1–9', '判断の選択肢を選ぶ'], ['Enter', '判断: この案で確定 / 呼び出し: コードを開く'], ['j / k', '次 / 前の claim へ'], ['c', 'フォーカス中の claim・行にコメント'], ['x', '呼び出しの変更を取り消す'], ['↑ ↓', 'コードと呼び出しの行を移動'], ['o / O', 'すべて開く / すべて閉じる'], ['r', '全体への指摘へ'], ['Ctrl+Enter', '回答: 実装に進める(入力欄の中では働かない)'], ['?', 'この一覧'], ['Esc', '閉じる']].flatMap(([k, v]) => [h('dt', null, h('kbd', null, k)), h('dd', null, v)])),
     h('div', { class: 'hp-dlg-acts' }, h('span', { class: 'grow' }), h('button', { type: 'button', class: 'hp-btn', onclick: () => help.close() }, '閉じる')));
   document.body.append(help);
   HP.showTab = showTab;
@@ -1319,13 +1342,13 @@ function buildChrome(plan) {
   if (h1) h1.after(meta); else plan.prepend(meta);
   const levelOne = $$(':scope > hp-claim', plan).filter((c) => !c.getAttribute('kind'));
   if (levelOne.length) {
-    const toc = h('ol', { class: 'hp-toc', 'aria-label': '要点' }, ...levelOne.map((c) => h('li', null, h('button', { type: 'button', class: 'hp-toc-b', onclick: () => go(c) }, h('span', { class: 'hp-toc-n' }, c._no), h('span', { html: c._head.querySelector('.hp-claim-text').innerHTML })))));
+    const toc = h('ol', { class: 'hp-toc', 'aria-label': '要点' }, ...levelOne.map((c) => h('li', null, h('button', { type: 'button', class: 'hp-toc-b', onclick: () => go(c) }, (() => { const m = mark('none'); tocMarks.push([c, m]); return m; })(), h('span', { class: 'hp-toc-n' }, c._no), h('span', { html: c._head.querySelector('.hp-claim-text').innerHTML })))));
     $(':scope > hp-claim', plan)?.before(toc);
   }
   const bar = h('div', { class: 'hp-bar', role: 'region', 'aria-label': '回答の状況' },
     h('span', { class: 'hp-prog', 'aria-live': 'polite' }, ...(asks.length ? ['判断 ', h('b', { class: 'hp-prog-n' }), `/${asks.length}`] : ['判断なし'])),
-    asks.length ? h('span', { class: 'hp-dots' }, ...asks.map((a) => h('button', { type: 'button', class: 'hp-dot', onclick: () => openAsk(a, { focus: true }) }))) : null,
-    h('button', { type: 'button', class: 'hp-btn hp-next', onclick: () => nextAsk() }, '次の未確認', h('kbd', null, 'n')),
+    asks.length ? h('span', { class: 'hp-dots' }, ...asks.map((a) => h('button', { type: 'button', class: 'hp-dot', onclick: () => openAsk(a, { focus: true }) }, mark('pending')))) : null,
+    h('button', { type: 'button', class: 'hp-btn hp-next', onclick: () => nextAsk() }, '次の未回答', h('kbd', null, 'n')),
     h('button', { type: 'button', class: 'hp-btn primary hp-respond', onclick: () => { HP.openRespond(false, !!nowAsk); if (nowAsk) openAsk(nowAsk, { focus: true }); } }, '回答を書く', h('kbd', null, 'r')));
   document.body.append(bar);
 }
